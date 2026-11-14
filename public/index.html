@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4f5f1">
+    <meta name="description" content="A connection workbench for Signal on the web. Test browser access, relay transport, and Signal TLS.">
+    <title>Twang · Signal connection lab</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css">
+    <script type="module" src="./app/main.mjs"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="./" aria-label="Twang home"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M4 20h9l7-13v26l7-13h9"/></svg>twang<span class="wordmark-dot">.</span></a>
+      <span class="header-label">SIGNAL CONNECTION LAB <span class="version">POC 01</span></span>
+      <a class="source-link" href="https://signal.org/blog/run-a-proxy/" target="_blank" rel="noreferrer">Signal TLS proxy notes <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main>
+      <section class="intro">
+        <div><p class="eyebrow"><span class="live-dot"></span> A SIGNAL, THROUGH THE WEB</p><h1>Give the connection<br>a little <em>twang.</em></h1><p class="intro-copy">Find out what makes it through. Probe Signal’s endpoints directly, then test a TLS connection through a byte relay.</p></div>
+        <div class="signal-art" aria-hidden="true"><svg viewBox="0 0 330 160"><path class="art-thread" d="M0 80h100l35-48 32 96 31-96 34 48h98"/><path class="art-echo" d="M0 80h100l35-24 32 48 31-48 34 24h98"/><circle cx="100" cy="80" r="5"/><circle cx="232" cy="80" r="5"/><circle class="art-node" cx="167" cy="128" r="8"/></svg><div class="art-labels"><span>BROWSER</span><span>RELAY</span><span>SIGNAL</span></div></div>
+      </section>
+
+      <div class="environment" aria-label="Browser environment"><span><i id="secure-indicator"></i><strong id="secure-label">Checking context</strong></span><span id="wasm-label">Checking WebAssembly</span><span id="online-label">Checking network</span><span class="environment-note">No account or message keys required</span></div>
+
+      <div class="workbench">
+        <section class="panel controls" aria-labelledby="configure-heading">
+          <div class="panel-heading"><span class="section-number">01</span><h2 id="configure-heading">Set up a probe</h2></div>
+          <form id="probe-form">
+            <fieldset class="mode-fieldset"><legend>Connection path</legend><div class="segmented"><label><input type="radio" name="route" value="direct" checked><span>Direct browser</span></label><label><input type="radio" name="route" value="relay"><span>TLS via relay</span></label></div></fieldset>
+            <p class="field-help" id="route-help">Use the browser’s own networking. A failed probe may reflect certificate trust, CORS, or server policy.</p>
+
+            <div class="field"><label for="probe-kind">Probe</label><select id="probe-kind" name="kind"><option value="https">HTTPS response</option><option value="websocket">Provisioning WebSocket</option></select><p class="field-help" id="kind-help">Requests the endpoint root. Any readable HTTP status proves that an HTTP response arrived.</p></div>
+
+            <div class="field" id="relay-field" hidden><label for="relay-url">Wisp relay URL <span class="optional">v1</span></label><input id="relay-url" name="relay" type="url" spellcheck="false" autocomplete="off" placeholder="wss://relay.example.com/wisp/"><p class="field-help">Run the included relay, or enter your own Signal-only Wisp v1 endpoint. A standard Signal TLS proxy is a different protocol.</p><details class="setup-note"><summary>Local relay setup</summary><p>Run <code>npm install</code> and <code>npm start</code> from the repository. The development server includes the byte relay.</p><p>A static deployment needs a separate relay host. Use <code>wss://</code> from an HTTPS page.</p></details></div>
+
+            <fieldset class="targets-fieldset"><legend>Signal endpoints <span class="optional">TCP 443</span></legend><div id="endpoint-list" class="endpoint-list"></div></fieldset>
+
+            <div class="field timeout-field"><label for="timeout">Timeout per endpoint</label><select id="timeout"><option value="8000">8 seconds</option><option value="15000" selected>15 seconds</option><option value="30000">30 seconds</option></select></div>
+            <p id="form-error" class="form-error" role="alert" hidden></p>
+            <div class="run-actions"><button id="run" class="button primary" type="submit"><span aria-hidden="true">↗</span> Run probe <span id="run-count" class="button-count">2</span></button><button id="cancel" class="button cancel" type="button" hidden>Stop</button></div>
+            <p class="scope-note">Bounded, unauthenticated checks. Nothing is sent until you run a probe.</p>
+          </form>
+        </section>
+
+        <section class="panel results-panel" aria-labelledby="results-heading">
+          <div class="panel-heading"><span class="section-number">02</span><h2 id="results-heading">Read the signal</h2><span id="run-state" class="pill neutral">Ready</span></div>
+          <div class="results-toolbar"><p id="results-summary" aria-live="polite">Your connection results will appear here.</p><div><button id="export" type="button" class="text-button" disabled>Export JSON <span aria-hidden="true">↓</span></button><button id="clear" type="button" class="text-button" disabled>Clear</button></div></div>
+          <div id="results" class="results" aria-live="polite"><div class="empty-state" id="empty-state"><div class="empty-glyph" aria-hidden="true">⌁</div><h3>Waiting for a vibration.</h3><p>Choose your endpoints and run a probe.<br>Each result includes timing and the evidence behind it.</p><div class="empty-path"><span>Browser</span><b>· · ·</b><span>Signal</span></div></div></div>
+
+          <details id="event-log" class="event-log" open><summary><span>EVENT LOG</span><span id="event-count">0 events</span></summary><div id="log-entries" class="log-entries" role="log" aria-live="off"><p class="log-placeholder">No network activity yet.</p></div></details>
+        </section>
+      </div>
+
+      <section class="reading-guide" aria-label="Interpreting results"><div><span class="guide-mark">↗</span><h3>A response is a response.</h3><p>401, 403, and 404 can still prove a working transport. They don’t mean a Signal account is authenticated.</p></div><div><span class="guide-mark">⌁</span><h3>A browser error is ambiguous.</h3><p>Browser APIs usually hide TLS and handshake details. We report what was observed, without guessing the cause.</p></div><div><span class="guide-mark">◇</span><h3>Keep the TLS boundary.</h3><p>The relay forwards bytes. The TLS connection to Signal runs inside your browser using WebAssembly.</p></div></section>
+      <details class="trust-details"><summary>Certificate trust &amp; diagnostic scope</summary><p id="trust-policy">Relay probes use certificate validation with Signal’s bundled root certificates and the transport library’s standard public roots. This PoC does not enforce Signal-only certificate pinning.</p><p>Provisioning tests stop at a temporary server address. They never generate a linking QR code, link a device, register an account, or request a user’s messages. Results live in this tab until you clear them or export a local report.</p></details>
+    </main>
+    <footer><span class="footer-brand">twang.</span><span>Experimental connection workbench · Unofficial Signal client research</span><span>Made to find the next question.</span></footer>
+  </body>
+</html>
