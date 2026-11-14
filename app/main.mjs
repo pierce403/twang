@@ -1,21 +1,18 @@
 import {
   SIGNAL_ENDPOINTS, TRUST_POLICY,
   probeDirectHttps, probeDirectWebSocket,
-  probeRelayTls, probeRelayHttps, probeRelayProvisioning,
 } from './transport.mjs';
 
 const $ = (selector) => document.querySelector(selector);
 const form = $('#probe-form');
 const kind = $('#probe-kind');
-const relayField = $('#relay-field');
-const relayInput = $('#relay-url');
 const results = [];
 const events = [];
 let controller;
 let running = false;
 let sequence = 0;
 
-const route = () => form.elements.route.value;
+const route = () => 'direct';
 const checkedHosts = () => [...form.querySelectorAll('input[name="endpoint"]:checked:not(:disabled)')].map((input) => input.value);
 const create = (tag, className, text) => {
   const element = document.createElement(tag);
@@ -23,15 +20,10 @@ const create = (tag, className, text) => {
   if (text !== undefined) element.textContent = text;
   return element;
 };
-const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
-relayInput.value = local
-  ? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/wisp/`
-  : `wss://${location.host}/wisp/`;
-
 function setEnvironment() {
   $('#secure-label').textContent = window.isSecureContext ? 'Secure context' : 'Insecure context';
   $('#secure-indicator').style.backgroundColor = window.isSecureContext ? '#83a25c' : '#c49755';
-  $('#wasm-label').textContent = typeof WebAssembly === 'object' ? 'WebAssembly available' : 'WebAssembly unavailable';
+  $('#api-label').textContent = 'Native HTTPS / WebSocket';
   $('#online-label').textContent = navigator.onLine ? 'Browser reports online' : 'Browser reports offline';
 }
 setEnvironment();
@@ -61,30 +53,11 @@ if (SIGNAL_ENDPOINTS.length > 5) {
   endpointList.append(more);
 }
 
-function updateConfiguration() {
-  const useRelay = route() === 'relay';
-  relayField.hidden = !useRelay;
-  const oldKind = kind.value;
-  kind.replaceChildren();
-  const options = useRelay
-    ? [['tls', 'TLS handshake'], ['https', 'HTTPS response'], ['websocket', 'Provisioning WebSocket']]
-    : [['https', 'HTTPS response'], ['websocket', 'Provisioning WebSocket']];
-  for (const [value, text] of options) {
-    const option = create('option', '', text);
-    option.value = value;
-    kind.append(option);
-  }
-  kind.value = options.some(([value]) => value === oldKind) ? oldKind : options[0][0];
-  $('#route-help').textContent = useRelay
-    ? 'The browser runs the Signal TLS connection in WebAssembly. Your relay only forwards encrypted bytes.'
-    : 'Use the browser’s own networking. A failed probe may reflect certificate trust, CORS, or server policy.';
-  updateKind();
-}
+function updateConfiguration() { updateKind(); }
 function updateKind() {
   const descriptions = {
-    tls: 'Completes a certificate-validated TLS handshake to the selected host. No application request is sent.',
     https: 'Requests the endpoint root. Any readable HTTP status proves that an HTTP response arrived.',
-    websocket: 'Opens an unauthenticated provisioning socket, decodes its temporary address, then closes. No device is linked.',
+    websocket: 'Tests a native browser WebSocket upgrade, then closes. No provisioning message is decoded and no device is linked.',
   };
   $('#kind-help').textContent = descriptions[kind.value];
   for (const input of form.querySelectorAll('input[name="endpoint"]')) {
@@ -136,7 +109,7 @@ function resultCard(record) {
   article.dataset.state = 'working';
   const top = create('div', 'result-top');
   top.append(create('h3', 'result-host', record.host), create('span', 'pill working', 'Connecting'));
-  const meta = create('p', 'result-meta', `${record.route === 'relay' ? 'TLS via relay' : 'Direct browser'} · ${record.kind === 'websocket' ? 'Provisioning WebSocket' : record.kind.toUpperCase()}`);
+  const meta = create('p', 'result-meta', `Direct browser · ${record.kind === 'websocket' ? 'Provisioning WebSocket' : record.kind.toUpperCase()}`);
   article.append(top, meta, create('p', 'result-summary', 'Starting probe…'));
   $('#results').prepend(article);
   return article;
@@ -146,7 +119,7 @@ function finishCard(card, record) {
   card.dataset.state = state;
   const pill = card.querySelector('.pill');
   pill.className = `pill ${state}`;
-  pill.textContent = record.result.ok ? 'Connected' : state === 'neutral' ? 'Stopped' : state === 'timeout' ? 'Timed out' : 'Unavailable';
+  pill.textContent = record.result.ok ? 'Connected' : state === 'neutral' ? 'Stopped' : state === 'timeout' ? 'Timed out' : 'Not established';
   card.querySelector('.result-summary').textContent = record.result.summary || 'Probe completed without a summary.';
   card.querySelector('.result-meta').append(document.createTextNode(` · ${Math.round(record.result.durationMs || 0)} ms`));
   const detail = create('details', 'result-details');
@@ -155,15 +128,6 @@ function finishCard(card, record) {
     ...record.result.details,
   }, null, 2)));
   card.append(detail);
-}
-
-function validateRelay(value) {
-  let url;
-  try { url = new URL(value); } catch { throw new Error('Enter a complete ws:// or wss:// relay URL.'); }
-  if (!['ws:', 'wss:'].includes(url.protocol)) throw new Error('The relay must speak WebSocket (ws:// or wss://), not ordinary HTTPS or the stock Signal TLS proxy protocol.');
-  if (url.username || url.password || url.search || url.hash) throw new Error('Use a relay URL without credentials, query parameters, or a fragment.');
-  if (url.protocol === 'ws:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new Error('Use wss:// for a remote relay. Unencrypted ws:// is limited to local development.');
-  return url.href;
 }
 
 function setRunning(value) {
@@ -186,7 +150,6 @@ form.addEventListener('submit', async (event) => {
   const settings = {route: route(), kind: kind.value, timeoutMs: Number($('#timeout').value)};
   try {
     if (!hosts.length) throw new Error('Choose at least one endpoint.');
-    if (settings.route === 'relay') settings.relayUrl = validateRelay(relayInput.value.trim());
   } catch (error) {
     $('#form-error').textContent = error.message;
     $('#form-error').hidden = false;
@@ -202,9 +165,7 @@ form.addEventListener('submit', async (event) => {
       const record = {id: ++sequence, host, ...settings, startedAt: new Date().toISOString()};
       const card = resultCard(record);
       $('#results-summary').textContent = `Testing ${completed + 1} of ${hosts.length}: ${host}`;
-      const probe = settings.route === 'direct'
-        ? settings.kind === 'https' ? probeDirectHttps : probeDirectWebSocket
-        : settings.kind === 'tls' ? probeRelayTls : settings.kind === 'https' ? probeRelayHttps : probeRelayProvisioning;
+      const probe = settings.kind === 'https' ? probeDirectHttps : probeDirectWebSocket;
       try {
         record.result = await probe({host, ...settings, signal, onEvent: (entry) => addEvent(entry, host)});
       } catch (error) {
@@ -242,7 +203,7 @@ $('#clear').addEventListener('click', () => {
   $('#export').disabled = true;
 });
 $('#export').addEventListener('click', () => {
-  const report = {schema:'twang-diagnostics/1', exportedAt:new Date().toISOString(), trustPolicy:TRUST_POLICY, environment:{secureContext:window.isSecureContext, webAssembly:typeof WebAssembly === 'object', online:navigator.onLine, userAgent:navigator.userAgent}, results, events};
+  const report = {schema:'twang-diagnostics/1', exportedAt:new Date().toISOString(), trustPolicy:TRUST_POLICY, environment:{secureContext:window.isSecureContext,  online:navigator.onLine, userAgent:navigator.userAgent}, results, events};
   const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], {type:'application/json'}));
   const link = create('a');
   link.href = url;
