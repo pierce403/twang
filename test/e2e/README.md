@@ -27,9 +27,19 @@ The fixture uses plain loopback WebSockets; production outer WSS certificate
 validation, Cloudflare networking, full Nginx/Docker operation, and live Signal
 interoperability require separate verification.
 
-The app's inner WebSocket diagnostic tests only upgrading the connection.
-The fixture additionally checks server-initiated binary reception. Sending
-application messages through Epoxy's inner WebSocket API is not covered: an
-exploratory send test stalled after upgrading and needs further investigation
-before adding account linking or messaging. The raw TLS stream payload test does
-verify bidirectional 2 MiB transfer.
+The old Epoxy inner WebSocket send API stalled in an exploratory test. Twang now
+uses its own bounded RFC 6455 implementation over Epoxy's verified raw TLS
+stream. The browser suite verifies its masked outbound frames and binary echo.
+The raw TLS payload test also verifies bidirectional 2 MiB transfer.
+
+`linking.test.mjs` drives the real UI with an independent local phone/service:
+QR generation, encrypted provisioning, actual WASM signed Curve25519/Kyber
+prekeys, encrypted pending keys before activation, confirmed storage and reload,
+rejected registration cleanup, and no backlog or new-account registration calls.
+Only the test server rewrites the fixed outer proxy and serves a fixture CA;
+production has no configurable origin or certificate bypass. The fixture refuses
+other WebSocket destinations so tests cannot contact a real account.
+
+`pwa.test.mjs` verifies service-worker installation, an offline reload under
+production CSP, and explicit updates blocked by a busy second tab. No actual
+Signal account is used or linked by these automated tests.

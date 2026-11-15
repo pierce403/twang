@@ -18,7 +18,7 @@ test('browser WASM TLS over raw WebSocket transport', { timeout: 45000 }, async 
   const output = page.locator('#results[data-complete="true"]');
   await output.waitFor({ timeout: 35000 });
   const results = JSON.parse(await output.textContent());
-  assert.equal(results.length, 7, 'The complete browser TLS suite must run');
+  assert.equal(results.length, 8, 'The complete browser TLS suite must run');
   for (const result of results) await t.test(result.name, () => assert.equal(result.ok, true, result.error));
   assert.deepEqual(errors, [], 'Unexpected unhandled browser errors');
 });

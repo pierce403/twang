@@ -2,6 +2,8 @@ import {
   SIGNAL_ENDPOINTS, TRUST_POLICY,
 } from './transport.mjs';
 import { PROXY_ENDPOINT as PROXY_URL, PROXY_TRUST_POLICY, probeProxyTls, probeProxyHttps, probeProxyWebSocket } from './proxy-transport.mjs';
+import { setPwaBusy } from './pwa.mjs';
+import './link-ui.mjs';
 
 const $ = (selector) => document.querySelector(selector);
 const form = $('#probe-form');
@@ -134,6 +136,7 @@ function finishCard(card, record) {
 
 function setRunning(value) {
   running = value;
+  setPwaBusy(value, 'diagnostics');
   for (const input of form.querySelectorAll('input,select')) input.disabled = value;
   if (!value) updateKind();
   $('#run').disabled = value || checkedHosts().length === 0;

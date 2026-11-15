@@ -1,4 +1,5 @@
 import { loadEpoxy, createWebSocketTransport } from '/app/proxy-transport.mjs';
+import { openSignalWebSocket } from '/app/link-socket.mjs';
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -108,6 +109,25 @@ export async function runBrowserSuite(config, progress = () => {}) {
       const actual = data instanceof Uint8Array ? data : new Uint8Array(data);
       check(actual.length === payload.length && actual.every((value, index) => value === payload[index]), 'Inner WebSocket payload changed');
       await socket.close(1000, 'Fixture complete');
+    });
+  });
+  await run('Raw inner WSS sends masked client binary data through actual WASM TLS', async () => {
+    await clientFor({}, async (client, target, abort) => {
+      const payload = new Uint8Array([7, 0, 194, 255, 123, 9]);
+      let resolveEcho, rejectEcho;
+      const echo = new Promise((resolve, reject) => { resolveEcho = resolve; rejectEcho = reject; });
+      echo.catch(() => {});
+      const socket = await deadline(openSignalWebSocket(client,
+        `wss://${target}/v1/websocket/provisioning/`, {
+          signal: abort.signal, headers: { 'X-Twang-Fixture': 'browser' },
+          onMessage(data) {
+            if (data instanceof Uint8Array && data.length === payload.length &&
+              data.every((value, index) => value === payload[index])) resolveEcho();
+          },
+          onClose(event) { rejectEcho(event.error ?? new Error('Inner socket closed before binary echo')); },
+        }));
+      try { await deadline(socket.send(payload)); await deadline(echo); }
+      finally { await socket.close(1000, 'Fixture complete'); }
     });
   });
   await run('Abort closes a pending TLS handshake promptly', async () => {

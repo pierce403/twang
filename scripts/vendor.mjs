@@ -3,6 +3,7 @@
 import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { build } from 'esbuild';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const packageDir = path.join(root, 'node_modules/@mercuryworkshop/epoxy-tls');
@@ -29,3 +30,19 @@ const license = await readFile(path.join(packageDir, 'LICENSE'), 'utf8').catch((
 if (license) await writeFile(path.join(output, 'LICENSE'), license);
 await writeFile(path.join(output, 'VERSION'), `${metadata.name}@${metadata.version}\nSource: https://github.com/MercuryWorkshop/epoxy-tls\nLicense: ${metadata.license}\nPackaging-only change: embedded JavaScript helper extracted to epoxy-utils.mjs.\n`);
 console.log(`Prepared Epoxy ${metadata.version} browser assets`);
+
+const signalPackage = path.join(root, 'node_modules/@getmaapp/signal-wasm');
+const signalMetadata = JSON.parse(await readFile(path.join(signalPackage, 'package.json'), 'utf8'));
+if (signalMetadata.version !== '0.6.6') throw new Error('Unexpected Signal WASM dependency version');
+const signalOutput = path.join(root, 'public/vendor/signal');
+await mkdir(signalOutput, { recursive: true });
+for (const file of ['signal_wasm.js', 'signal_wasm_bg.wasm', 'signal_wasm.d.ts', 'LICENSE']) {
+  await copyFile(path.join(signalPackage, file), path.join(signalOutput, file));
+}
+await writeFile(path.join(signalOutput, 'VERSION'), '@getmaapp/signal-wasm@0.6.6\nSource: https://github.com/getmaapp/signal-wasm\nLicense: AGPL-3.0-only\n');
+const qrOutput = path.join(root, 'public/vendor/qrcode');
+await mkdir(qrOutput, { recursive: true });
+await build({ entryPoints: [path.join(root, 'node_modules/qrcode/lib/browser.js')],
+  bundle: true, platform: 'browser', format: 'esm', target: 'es2022',
+  outfile: path.join(qrOutput, 'qrcode.mjs'), minify: true });
+await copyFile(path.join(root, 'node_modules/qrcode/license'), path.join(qrOutput, 'LICENSE'));

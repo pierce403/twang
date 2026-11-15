@@ -3,58 +3,80 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#f4f5f1">
-    <meta name="description" content="A connection workbench for Signal on the web. Static diagnostics with browser-side TLS through a fixed WebSocket proxy.">
-    <title>Twang · Signal connection lab</title>
+    <meta name="theme-color" content="#14121b">
+    <meta name="description" content="A new thread for your Signal account. Link your phone to Twang, a static web companion with browser-side encryption.">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Twang · A new thread</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+    <link rel="manifest" href="./manifest.webmanifest">
     <link rel="stylesheet" href="./styles.css">
     <script type="module" src="./app/main.mjs"></script>
   </head>
   <body>
+    <a class="skip-link" href="#link-panel">Skip to account linking</a>
     <header class="site-header">
-      <a class="wordmark" href="./" aria-label="Twang home"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M4 20h9l7-13v26l7-13h9"/></svg>twang<span class="wordmark-dot">.</span></a>
-      <span class="header-label">SIGNAL CONNECTION LAB <span class="version">POC 01</span></span>
-      <a class="source-link" href="https://signal.org/blog/run-a-proxy/" target="_blank" rel="noreferrer">Signal TLS proxy notes <span aria-hidden="true">↗</span></a>
+      <a class="wordmark" href="./" aria-label="Twang home"><svg viewBox="0 0 44 44" aria-hidden="true"><path d="M22 0v12M18 19l-7-6-6 2m13 8L9 21l-5 6m15 0-8 6 1 7m8-10-3 10m9-21 7-6 6 2m-13 8 9-2 5 6m-15 0 8 6-1 7m-8-10 3 10"/><ellipse cx="22" cy="23" rx="5" ry="8"/><circle cx="22" cy="14" r="3"/></svg>twang<span class="wordmark-dot">.</span></a>
+      <span class="header-label">A NEW THREAD FOR SIGNAL</span>
+      <nav class="header-actions" aria-label="App actions"><button id="pwa-update" class="text-button" type="button" hidden>Update available ↗</button><button id="install-app" class="button install-button" type="button" hidden><span aria-hidden="true">↓</span> Install Twang</button><a class="source-link" href="https://github.com/pierce403/twang" target="_blank" rel="noreferrer" aria-label="Twang source on GitHub">Source <span aria-hidden="true">↗</span></a></nav>
     </header>
 
     <main>
-      <section class="intro">
-        <div><p class="eyebrow"><span class="live-dot"></span> A SIGNAL, THROUGH THE WEB</p><h1>Give the connection<br>a little <em>twang.</em></h1><p class="intro-copy">Find out what makes it through. Test Signal’s endpoints through our WebSocket proxy. Signal TLS stays in your browser; the app is served as static files.</p></div>
-        <div class="signal-art" aria-hidden="true"><svg viewBox="0 0 330 160"><path class="art-thread" d="M0 80h100l35-48 32 96 31-96 34 48h98"/><path class="art-echo" d="M0 80h100l35-24 32 48 31-48 34 24h98"/><circle cx="100" cy="80" r="5"/><circle cx="232" cy="80" r="5"/><circle class="art-node" cx="167" cy="128" r="8"/></svg><div class="art-labels"><span>BROWSER</span><span>ENCRYPTED TUNNEL</span><span>SIGNAL</span></div></div>
+      <section class="intro" aria-labelledby="intro-heading">
+        <div class="intro-text"><p class="eyebrow"><span class="live-dot"></span> FOLLOW THE THREAD</p><h1 id="intro-heading">Your Signal.<br>A little more <em>web.</em></h1><p class="intro-copy">A familiar account, a new place to connect. Link the Signal account on your phone to Twang and make yourself at home.</p><div class="intro-footnote"><span class="mini-web" aria-hidden="true">✳</span> An independent, experimental Signal companion.</div></div>
+        <div class="silk-art" aria-hidden="true"><svg viewBox="0 0 480 310"><g class="web-spokes"><path d="M255 151 31 22M255 151 198 0M255 151 358 9M255 151 466 64M255 151 475 193M255 151 380 299M255 151 190 310M255 151 42 266M255 151 0 145"/></g><g class="web-rings"><path d="m224 133 23-25 27 8 23 24-3 27-22 23-32-3-27-21Z"/><path d="m191 114 40-53 68 20 57 36-5 70-53 49-75-9-70-44Z"/><path d="m150 91 65-93 108 23 91 62 10 126-88 92-143 1-93-73Z"/><path d="m96 60 102-128 160 77 108 55 9 129-95 106-190 71L42 266 0 145Z"/></g><path class="web-vibration" d="m191 114 40-53 68 20 57 36-5 70-53 49"/><path class="spider-thread" d="M255 151v69"/><g class="art-spider"><path d="m249 224-14-13-12 4m26 15-18-2-10 12m29-3-15 12 2 15m15-22-5 22m14-40 14-13 12 4m-26 15 18-2 10 12m-29-3 15 12-2 15m-15-22 5 22"/><ellipse cx="255" cy="233" rx="8" ry="12"/><circle cx="255" cy="219" r="5"/></g><circle class="web-dew" cx="191" cy="114" r="3"/><circle class="web-dew" cx="351" cy="187" r="3"/><circle class="web-dew small" cx="299" cy="81" r="2"/><circle class="web-dew small" cx="223" cy="227" r="2"/></svg><span class="art-caption">EVERY CONNECTION STARTS WITH A THREAD.</span></div>
       </section>
 
-      <div class="environment" aria-label="Browser environment"><span><i id="secure-indicator"></i><strong id="secure-label">Checking context</strong></span><span id="api-label">Checking browser APIs</span><span id="online-label">Checking network</span><span class="environment-note">No account or message keys required</span></div>
+      <section id="link-panel" class="link-panel" aria-labelledby="link-heading">
+        <div class="link-content">
+          <div class="panel-kicker"><span class="section-number">01</span><span>MAKE A CONNECTION</span></div>
+          <h2 id="link-heading">Bring your Signal along.</h2>
+          <p class="link-description">Connect your existing account as a linked device.<br class="desktop-break"> Your phone stays your primary device.</p>
+          <div id="link-account-summary" class="account-summary" hidden></div>
+          <div class="field device-name-field"><label for="link-device-name">Name this device</label><input id="link-device-name" type="text" value="Twang" maxlength="50" autocomplete="off" spellcheck="false"><p class="field-help">The name you’ll see in Signal’s linked devices.</p></div>
+          <div class="link-actions"><button id="link-start" class="button primary" type="button"><span aria-hidden="true">✳</span> Link existing account <span aria-hidden="true">↗</span></button><button id="link-cancel" class="button secondary" type="button" hidden>Cancel</button><button id="link-copy" class="text-button" type="button" hidden>Copy linking URL</button><button id="link-forget" class="text-button danger" type="button" hidden>Forget this device</button></div>
+          <p id="link-error" class="form-error" role="alert" hidden></p>
+          <p id="link-status" class="link-status" role="status" aria-live="polite">Ready when you are.</p>
+          <p class="link-scope"><span aria-hidden="true">◇</span> No new account. No message history imported.</p>
+        </div>
+        <div class="link-scan">
+          <div id="link-qr" class="qr-frame" aria-label="Signal linking QR code"><div class="qr-placeholder"><svg viewBox="0 0 160 160" aria-hidden="true"><g class="placeholder-web"><path d="M80 80 15 15M80 80V0M80 80l65-65M80 80h80M80 80l65 65M80 80v80M80 80l-65 65M80 80H0"/><path d="m58 58 22-8 22 8 8 22-8 22-22 8-22-8-8-22Zm-21-21 43-15 43 15 15 43-15 43-43 15-43-15-15-43Z"/></g><g class="placeholder-spider"><path d="m75 76-13-9-8 4m21 10-15 1-7 9m23-4-12 11 2 11m12-17-3 17m10-33 13-9 8 4m-21 10 15 1 7 9m-23-4 12 11-2 11m-12-17 3 17"/><ellipse cx="80" cy="83" rx="6" ry="9"/><circle cx="80" cy="72" r="4"/></g></svg><span>Your new thread starts here</span></div></div>
+          <div class="scan-instructions"><span class="scan-number">↗</span><p>On your phone, open <strong>Signal → Settings → Linked devices → Link new device</strong>, then scan the QR code.</p></div>
+        </div>
+      </section>
 
-      <div class="workbench">
-        <section class="panel controls" aria-labelledby="configure-heading">
-          <div class="panel-heading"><span class="section-number">01</span><h2 id="configure-heading">Set up a probe</h2></div>
-          <form id="probe-form">
-            <p class="field-help" id="route-help">Proxy endpoint: <code id="proxy-endpoint">wss://proxy.twang.chat/v1/tls-tunnel</code></p>
+      <div class="quiet-promise"><span class="promise-dot"></span><p>Your connection keys stay on this device.</p><span class="promise-separator" aria-hidden="true">·</span><p>Install Twang to keep it close.</p></div>
 
-            <div class="field"><label for="probe-kind">Probe</label><select id="probe-kind" name="kind"><option value="tls">TLS handshake</option><option value="https">HTTPS response</option><option value="websocket">Provisioning WebSocket</option></select><p class="field-help" id="kind-help">Validates the endpoint certificate and hostname inside WebAssembly.</p></div>
-
-
-            <fieldset class="targets-fieldset"><legend>Signal endpoints <span class="optional">HTTPS / WSS</span></legend><div id="endpoint-list" class="endpoint-list"></div></fieldset>
-
-            <div class="field timeout-field"><label for="timeout">Timeout per endpoint</label><select id="timeout"><option value="8000">8 seconds</option><option value="15000" selected>15 seconds</option><option value="30000">30 seconds</option></select></div>
-            <p id="form-error" class="form-error" role="alert" hidden></p>
-            <div class="run-actions"><button id="run" class="button primary" type="submit"><span aria-hidden="true">↗</span> Run probe <span id="run-count" class="button-count">2</span></button><button id="cancel" class="button cancel" type="button" hidden>Stop</button></div>
-            <p class="scope-note">Bounded, unauthenticated checks. Nothing is sent until you run a probe.</p>
-          </form>
-        </section>
-
-        <section class="panel results-panel" aria-labelledby="results-heading">
-          <div class="panel-heading"><span class="section-number">02</span><h2 id="results-heading">Read the signal</h2><span id="run-state" class="pill neutral">Ready</span></div>
-          <div class="results-toolbar"><p id="results-summary" aria-live="polite">Your connection results will appear here.</p><div><button id="export" type="button" class="text-button" disabled>Export JSON <span aria-hidden="true">↓</span></button><button id="clear" type="button" class="text-button" disabled>Clear</button></div></div>
-          <div id="results" class="results" aria-live="polite"><div class="empty-state" id="empty-state"><div class="empty-glyph" aria-hidden="true">⌁</div><h3>Waiting for a vibration.</h3><p>Choose your endpoints and run a probe.<br>Each result includes timing and the evidence behind it.</p><div class="empty-path"><span>Browser</span><b>· · ·</b><span>Proxy</span><b>· · ·</b><span>Signal</span></div></div></div>
-
-          <details id="event-log" class="event-log" open><summary><span>EVENT LOG</span><span id="event-count">0 events</span></summary><div id="log-entries" class="log-entries" role="log" aria-live="off"><p class="log-placeholder">No network activity yet.</p></div></details>
-        </section>
-      </div>
-
-      <section class="reading-guide" aria-label="Interpreting results"><div><span class="guide-mark">↗</span><h3>A response is a response.</h3><p>401, 403, and 404 can still prove a working transport. They don’t mean a Signal account is authenticated.</p></div><div><span class="guide-mark">⌁</span><h3>A browser error is ambiguous.</h3><p>The outer proxy connection, inner TLS handshake, and application response are reported separately.</p></div><div><span class="guide-mark">◇</span><h3>Know the browser boundary.</h3><p>WebAssembly runs Signal TLS over an encrypted byte tunnel. The proxy forwards bytes without terminating that inner TLS session.</p></div></section>
-      <details class="trust-details"><summary>Certificate trust &amp; diagnostic scope</summary><p id="trust-policy">The browser verifies the proxy connection. WebAssembly verifies Signal’s inner TLS certificate and hostname.</p><p>WebSocket tests stop after an upgrade; they do not decode provisioning messages. They never generate a linking QR code, link a device, register an account, or request a user’s messages. Results live in this tab until you clear them or export a local report.</p></details>
+      <details id="diagnostics" class="diagnostics-section">
+        <summary class="diagnostics-toggle"><div><span class="section-number">02</span><h2>Inspect the web</h2><span class="diagnostics-caption">Connection diagnostics</span></div><span class="details-chevron" aria-hidden="true">+</span></summary>
+        <div class="diagnostics-content">
+          <div class="environment" aria-label="Browser environment"><span><i id="secure-indicator"></i><strong id="secure-label">Checking context</strong></span><span id="api-label">Checking browser APIs</span><span id="online-label">Checking network</span></div>
+          <div class="workbench">
+            <section class="panel controls" aria-labelledby="configure-heading">
+              <div class="panel-heading"><h3 id="configure-heading">Set up a probe</h3></div>
+              <form id="probe-form">
+                <p class="field-help" id="route-help">Proxy endpoint: <code id="proxy-endpoint">wss://proxy.twang.chat/v1/tls-tunnel</code></p>
+                <div class="field"><label for="probe-kind">Probe</label><select id="probe-kind" name="kind"><option value="tls">TLS handshake</option><option value="https">HTTPS response</option><option value="websocket">Provisioning WebSocket</option></select><p class="field-help" id="kind-help">Validates the endpoint certificate and hostname inside WebAssembly.</p></div>
+                <fieldset class="targets-fieldset"><legend>Signal endpoints <span class="optional">HTTPS / WSS</span></legend><div id="endpoint-list" class="endpoint-list"></div></fieldset>
+                <div class="field timeout-field"><label for="timeout">Timeout per endpoint</label><select id="timeout"><option value="8000">8 seconds</option><option value="15000" selected>15 seconds</option><option value="30000">30 seconds</option></select></div>
+                <p id="form-error" class="form-error" role="alert" hidden></p>
+                <div class="run-actions"><button id="run" class="button primary" type="submit">Run probe <span id="run-count" class="button-count">2</span></button><button id="cancel" class="button secondary" type="button" hidden>Stop</button></div>
+                <p class="scope-note">Checks start only when you run a probe.</p>
+              </form>
+            </section>
+            <section class="panel results-panel" aria-labelledby="results-heading">
+              <div class="panel-heading"><h3 id="results-heading">Read the signal</h3><span id="run-state" class="pill neutral">Ready</span></div>
+              <div class="results-toolbar"><p id="results-summary" aria-live="polite">Your connection results will appear here.</p><div><button id="export" type="button" class="text-button" disabled>Export JSON ↗</button><button id="clear" type="button" class="text-button" disabled>Clear</button></div></div>
+              <div id="results" class="results" aria-live="polite"><div class="empty-state" id="empty-state"><div class="empty-glyph" aria-hidden="true">✳</div><h3>Waiting for a vibration.</h3><p>Choose your endpoints and run a probe.</p><div class="empty-path"><span>Browser</span><b>· · ·</b><span>Proxy</span><b>· · ·</b><span>Signal</span></div></div></div>
+              <details id="event-log" class="event-log" open><summary><span>EVENT LOG</span><span id="event-count">0 events</span></summary><div id="log-entries" class="log-entries" role="log" aria-live="off"><p class="log-placeholder">No network activity yet.</p></div></details>
+            </section>
+          </div>
+          <div class="reading-guide"><div><h3>A response is a response.</h3><p>401, 403, and 404 can prove a working transport. They don’t mean an account is authenticated.</p></div><div><h3>Follow the evidence.</h3><p>The proxy connection, inner TLS handshake, and application response are reported separately.</p></div></div>
+          <details class="trust-details"><summary>Certificate trust &amp; diagnostic scope</summary><p id="trust-policy">The browser verifies the proxy connection. WebAssembly verifies Signal’s inner TLS certificate and hostname.</p><p>Diagnostic WebSocket checks stop after upgrading. Account linking is a separate action above. Diagnostic results stay in this tab until cleared or exported.</p></details>
+        </div>
+      </details>
     </main>
-    <footer><span class="footer-brand">twang.</span><span>Experimental connection workbench · Unofficial Signal client research</span><span>Made to find the next question.</span></footer>
+    <footer><a class="footer-brand" href="./">twang.</a><span>Woven for the open web.</span><a href="https://github.com/pierce403/twang" target="_blank" rel="noreferrer">Experimental · Unofficial · Open source ↗</a></footer>
   </body>
 </html>

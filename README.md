@@ -1,15 +1,47 @@
 # Twang · static Signal connection lab
 
-Twang is a static HTML/CSS/JavaScript diagnostic app. It loads a locally bundled
-WebAssembly TLS implementation and uses one hardcoded WebSocket endpoint:
+Twang is a spider-themed, installable static PWA for linking an existing Signal
+account and diagnosing its connection. It uses one hardcoded WebSocket endpoint:
 
 `wss://proxy.twang.chat/v1/tls-tunnel` (subprotocol `signal-tls-v1`).
 
-The app has no server runtime, relay URL input, credentials, account registration,
-or device linking. Selecting an endpoint and pressing **Run probe** tests a
-certificate-validated inner TLS handshake, an HTTPS root response, or a
-provisioning WebSocket upgrade. No probes run automatically. Results stay in
-memory and can be exported locally.
+## Link an existing account
+
+Choose **Link existing account**, then scan the QR from Signal on your phone:
+**Settings → Linked devices → Link new device**. Your phone stays the primary
+device. Twang never asks for your phone number, a registration SMS, or Signal PIN,
+and it does not create a new account. QR capabilities omit history transfer;
+there are no backup, backlog, contact-sync, or message-history import requests.
+
+The browser opens Signal's provisioning WebSocket, generates an ephemeral X25519
+key, authenticates/decrypts the phone's provisioning envelope, and creates genuine
+libsignal XEdDSA-signed Curve25519 and round-3 Kyber1024 prekeys. It then submits
+`PUT /v1/devices/link`. Only a confirmed secondary-device ID and successful local
+save produce the **Account linked** state. Account linking is implemented; message
+sending/receiving and history import are not part of this version.
+
+Device identity keys, prekey records, profile material and the generated password
+stay in an encrypted IndexedDB vault, protected by a non-extractable AES-GCM key.
+Encrypted pending keys are saved before server activation to survive interrupted
+responses. A network-uncertain result never reports success or silently retries;
+check Linked devices on the phone before discarding pending local keys. Atomic
+vault operations prevent two tabs from replacing each other's pending keys.
+
+**Forget this device** erases local keys. Also unlink Twang on the phone to stop
+server delivery. Clearing browser/site data removes this device's local keys.
+The origin's application code can access the vault; browser encryption does not
+protect it from malicious code served by the same origin.
+
+## Install and use offline
+
+Install from your browser's app menu (or the **Install** button where supported).
+The standalone PWA caches only its versioned static shell, local WASM libraries,
+icons, and public certificates. It opens offline, while linking and diagnostic
+connections require network access. Account credentials, QR URLs, proxy/API
+traffic, reports and fixtures never enter service-worker caches.
+
+Updates wait for an explicit **Update app** action and ask every Twang tab whether
+linking or diagnostics are active. An active or unresponsive tab blocks activation.
 
 ## Transport and trust
 
@@ -45,7 +77,7 @@ npm run test:e2e
 `npm start` serves a local static preview. It forwards no connections. `dist/`
 contains the complete deployable app, including the pinned JS/WASM dependency
 and public certificates. Runtime requires a modern browser with WebAssembly,
-WebSockets, Streams, and a reachable configured proxy. No third-party CDN is
+WebSockets, Streams, WebCrypto X25519, IndexedDB, and a reachable configured proxy. No third-party CDN is
 used at runtime. Browser fixture tests and their temporary CA/private keys are
 excluded from the static build. See [browser test details](test/e2e/README.md).
 
@@ -86,14 +118,16 @@ queues, and cumulative bytes; it is not yet a full attachment-transfer relay.
 
 Local tests exercise routing, byte integrity, certificate/hostname rejection,
 cancellation, and bounded transport behavior. Browser fixture results establish
-local correctness only. Production Cloudflare deployment and live Signal
-interoperability require credentials and a live check; neither is implied by
-an offline test or successful build.
+local correctness only. A real browser obtained a live Signal provisioning QR through the configured
+proxy on 2026-11-15; the session was cancelled before phone approval. Completed
+enrollment is verified against the independent local phone/service fixture.
+Final live enrollment still requires scanning and approving from a real primary
+phone; an offline test or successful build does not establish that result.
 
-The inner WebSocket diagnostic stops after upgrading. An exploratory outbound
-WebSocket send stalled in the pinned TLS library; investigate that before adding
-linking or messaging. The tested raw TLS stream and HTTPS paths do not depend on
-that API. See the browser test notes for the exact coverage and limitation.
+Inner WebSockets use a bounded RFC 6455 implementation over the verified raw
+TLS stream. This avoids the previously observed Epoxy WebSocket send stall.
+Tests verify client masking, upgrade authentication, fragmentation, control
+frames, and bidirectional encrypted browser traffic.
 
 The earlier `experiments/signal-web-boost/` snapshot is historical. The fork
 above is the canonical proxy implementation. No upstream PR has been opened.

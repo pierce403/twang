@@ -1,5 +1,17 @@
 # Third-party components
 
+- **Signal WASM** (`@getmaapp/signal-wasm` 0.6.6), AGPL-3.0-only. Third-party
+  browser bindings to Signal's libsignal 0.101.0; used for XEdDSA signatures,
+  round-3 Kyber1024 prekeys, and durable private prekey records. The build copies
+  the pinned package's JS/WASM and license unchanged to `vendor/signal/`.
+  Source: https://github.com/getmaapp/signal-wasm
+- **qrcode** 1.5.4, MIT. Bundled locally into an ES module to draw the pairing QR.
+  Source: https://github.com/soldair/node-qrcode
+- **fake-indexeddb** 6.2.4, Apache-2.0. Account-vault test tooling only.
+  Source: https://github.com/dumbmatter/fakeIndexedDB
+- **esbuild** 0.28.1, MIT. Build tooling only.
+  Source: https://github.com/evanw/esbuild
+
 - **Epoxy TLS** (`@mercuryworkshop/epoxy-tls` 2.1.20-1), MercuryWorkshop,
   AGPL-3.0-only. The build copies its browser JavaScript, WebAssembly, license,
   and version metadata from the pinned npm package. The embedded helper module

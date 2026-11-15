@@ -1,4 +1,5 @@
 import { bounded, SIGNAL_ENDPOINTS } from './transport.mjs';
+import { openSignalWebSocket } from './link-socket.mjs';
 
 export const PROXY_ENDPOINT = 'wss://proxy.twang.chat/v1/tls-tunnel';
 export const PROXY_PROTOCOL = 'signal-tls-v1';
@@ -219,9 +220,8 @@ export function probeProxyWebSocket(options = {}) {
     const host = target(options);
     if (!SIGNAL_ENDPOINTS.find(endpoint => endpoint.host === host)?.provisioning)
       throw new Error('Provisioning WebSocket is tested only on Signal chat endpoints');
-    const { client, mod } = await createProxyClient(ctx);
-    const handlers = new mod.EpoxyHandlers(() => {}, () => {}, () => {}, () => {});
-    const socket = await client.connect_websocket(handlers, `wss://${host}/v1/websocket/provisioning/`, [], {});
+    const { client } = await createProxyClient(ctx);
+    const socket = await openSignalWebSocket(client, `wss://${host}/v1/websocket/provisioning/`, { signal: ctx.signal });
     ctx.defer(() => socket.close(1000, 'Diagnostic complete'));
     ctx.check();
     return { summary: 'Signal provisioning WebSocket upgrade completed', details: { host, proxy: PROXY_ENDPOINT,

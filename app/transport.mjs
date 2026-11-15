@@ -9,7 +9,7 @@ export const SIGNAL_ENDPOINTS = Object.freeze([
   { id: 'svr2', host: 'svr2.signal.org', label: 'Secure recovery 2', description: 'HTTPS root only; no recovery requests', provisioning: false },
   { id: 'svrb', host: 'svrb.signal.org', label: 'Secure recovery B', description: 'HTTPS root only; no recovery requests', provisioning: false },
 ]);
-export const TRUST_POLICY = 'The browser validates the outer WebSocket TLS to proxy.twang.chat. WebAssembly validates the inner Signal TLS certificate and hostname. The proxy forwards encrypted bytes and sees connection metadata, but does not receive Signal TLS keys. Diagnostics create no account or device link.';
+export const TRUST_POLICY = 'The browser validates outer TLS to proxy.twang.chat; WebAssembly validates the inner Signal TLS. The proxy forwards encrypted bytes and sees connection metadata. Account linking starts only when you choose it; private device credentials stay in this browser. Diagnostic probes do not link a device.';
 
 function detail(error) {
   if (error instanceof Error) return error.message;
