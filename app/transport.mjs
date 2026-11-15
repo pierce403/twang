@@ -1,6 +1,6 @@
 export const SIGNAL_ENDPOINTS = Object.freeze([
   { id: 'chat', host: 'chat.signal.org', label: 'Chat', description: 'Signal chat service', provisioning: true },
-  { id: 'grpc', host: 'grpc.chat.signal.org', label: 'Chat / HTTP 2', description: 'Current native chat transport', provisioning: true },
+  { id: 'grpc', host: 'grpc.chat.signal.org', label: 'Chat / HTTP 2', description: 'Current native chat transport', provisioning: false },
   { id: 'storage', host: 'storage.signal.org', label: 'Storage', description: 'Encrypted account storage', provisioning: false },
   { id: 'cdn', host: 'cdn.signal.org', label: 'CDN 0', description: 'Encrypted attachments', provisioning: false },
   { id: 'cdn2', host: 'cdn2.signal.org', label: 'CDN 2', description: 'Encrypted attachments', provisioning: false },
