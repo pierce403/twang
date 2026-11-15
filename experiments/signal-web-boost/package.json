@@ -1,0 +1,9 @@
+{
+  "name": "signal-web-boost-experiment",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": { "test": "node --test test/*.test.mjs", "start": "node server.mjs" },
+  "engines": { "node": ">=22.12.0" },
+  "dependencies": { "ws": "8.18.3" }
+}

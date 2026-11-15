@@ -1,0 +1,7 @@
+--- a/data/nginx-terminate/nginx.conf
++++ b/data/nginx-terminate/nginx.conf
+@@ -25,3 +25,3 @@
+     upstream relay {
+-         server nginx-relay:4433;
++         server web-boost:4433;
+     }

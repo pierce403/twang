@@ -30,3 +30,11 @@ Do not place Cloudflare credentials in the repository.
 npm run deploy:check builds assets and runs a Wrangler dry run.
 npm run deploy publishes them. Tests use mocked browser APIs and do not
 establish live Signal interoperability.
+
+## Experimental proxy compatibility work
+
+[Signal Web Boost](experiments/signal-web-boost/README.md) is a separate, optional
+operator-side patch prototype for the official Signal TLS Proxy. It adds a
+WebSocket byte transport alongside native TLS proxy traffic, retaining Signal's
+inner TLS and the existing destination allowlist. The deployed static lab does
+not yet use it. No Twang-hosted relay or Cloudflare service is added.

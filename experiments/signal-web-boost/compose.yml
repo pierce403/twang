@@ -1,0 +1,12 @@
+services:
+  nginx-terminate:
+    depends_on: [web-boost]
+  web-boost:
+    build: ./web-boost
+    restart: unless-stopped
+    depends_on: [nginx-relay]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # Internal Docker network only. nginx-terminate owns public port 443.
+    expose: ["4433"]
