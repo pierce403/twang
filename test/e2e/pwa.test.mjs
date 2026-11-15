@@ -37,6 +37,12 @@ test('PWA installs, reloads offline, and waits for idle tabs before updating', {
   t.after(() => browser.close());
   const context = await browser.newContext();
   const first = await context.newPage();
+  const pageErrors = [];
+  const navigations = [];
+  first.on('pageerror', error => pageErrors.push(error.message));
+  first.on('framenavigated', frame => {
+    if (frame === first.mainFrame()) navigations.push(frame.url());
+  });
   const url = `http://127.0.0.1:${server.address().port}/`;
   await first.goto(url);
   await first.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
@@ -68,7 +74,24 @@ test('PWA installs, reloads offline, and waits for idle tabs before updating', {
   await first.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
   await first.waitForFunction(async () => Boolean((await navigator.serviceWorker.getRegistration()).waiting));
   await first.locator('#pwa-update').click();
-  await first.waitForFunction(() => window.__twangUpdateBlocked === true);
+  try {
+    await first.waitForFunction(() => window.__twangUpdateBlocked === true, null, { timeout: 5000 });
+  } catch (error) {
+    const state = async page => page.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration();
+      const button = document.querySelector('#pwa-update');
+      return {
+        url: location.href, controller: navigator.serviceWorker.controller?.state,
+        waiting: registration?.waiting?.state, active: registration?.active?.state,
+        blocked: window.__twangUpdateBlocked,
+        button: button && { text: button.textContent, hidden: button.hidden, disabled: button.disabled },
+        status: document.querySelector('#pwa-status')?.textContent,
+      };
+    });
+    throw new Error(`PWA update guard did not report a blocked update: ${JSON.stringify({
+      first: await state(first), second: await state(second), navigations, pageErrors,
+    })}`, { cause: error });
+  }
   assert.equal(await first.evaluate(async () => Boolean((await navigator.serviceWorker.getRegistration()).waiting)), true);
   assert.equal(await second.locator('#pwa-update').isDisabled(), true);
 

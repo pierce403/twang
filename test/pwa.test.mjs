@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { buildPwa } from '../scripts/pwa-build.mjs';
-import { canRegisterPwa } from '../app/pwa.mjs';
+import { canRegisterPwa, registerPwa, setPwaBusy } from '../app/pwa.mjs';
 
 const template = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
 
@@ -128,4 +128,38 @@ test('PWA registration requires HTTPS or a secure loopback development origin', 
   assert.equal(canRegisterPwa({ protocol: 'http:', hostname: 'localhost' }, true), true);
   assert.equal(canRegisterPwa({ protocol: 'http:', hostname: 'twang.chat' }, false), false);
   assert.equal(canRegisterPwa({ protocol: 'file:', hostname: '' }, true), false);
+});
+
+test('a waiting update takes priority over a stale reload notification', async t => {
+  const saved = new Map(['window', 'document', 'navigator'].map(key => [key,
+    Object.getOwnPropertyDescriptor(globalThis, key)]));
+  t.after(() => {
+    for (const [key, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  });
+  const update = new EventTarget();
+  const serviceWorker = new EventTarget();
+  const registration = new EventTarget();
+  const window = new EventTarget();
+  let reloads = 0;
+  let activation;
+  window.location = { protocol: 'http:', hostname: 'localhost', reload: () => { reloads++; } };
+  window.isSecureContext = true;
+  serviceWorker.controller = { state: 'activated' };
+  serviceWorker.register = async () => registration;
+  Object.defineProperty(globalThis, 'window', { value: window, configurable: true });
+  Object.defineProperty(globalThis, 'document', { value: {
+    querySelector: selector => selector === '#pwa-update' ? update : null,
+  }, configurable: true });
+  Object.defineProperty(globalThis, 'navigator', { value: { serviceWorker }, configurable: true });
+  await registerPwa();
+  serviceWorker.dispatchEvent(new Event('controllerchange'));
+  registration.waiting = { postMessage: message => { activation = message; } };
+  setPwaBusy(false);
+  update.dispatchEvent(new Event('click'));
+  assert.equal(reloads, 0);
+  assert.equal(activation.type, 'TWANG_PWA_ACTIVATE');
+  assert.equal(update.textContent, 'Update app');
 });

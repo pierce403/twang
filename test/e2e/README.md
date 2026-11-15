@@ -43,3 +43,9 @@ other WebSocket destinations so tests cannot contact a real account.
 `pwa.test.mjs` verifies service-worker installation, an offline reload under
 production CSP, and explicit updates blocked by a busy second tab. No actual
 Signal account is used or linked by these automated tests.
+
+UI tests must wait for the initialized local-device state, not merely an enabled
+HTML button: IndexedDB initialization and module bootstrapping are asynchronous.
+Startup linking controls remain disabled until that state is known. PWA update
+tests must exercise the real waiting worker and another busy tab; a reload alone
+is not proof that the update guard ran.

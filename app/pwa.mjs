@@ -11,7 +11,7 @@ function updateButton() {
   button.hidden = !registration?.waiting && !reloadAvailable;
   button.disabled = busyReasons.size > 0;
   button.title = busyReasons.size ? 'Finish the active connection before updating' : 'Update the app shell';
-  if (reloadAvailable) button.textContent = 'Reload app';
+  button.textContent = registration?.waiting ? 'Update app' : 'Reload app';
 }
 
 // Separate reason strings let linking and a diagnostic run overlap safely.
@@ -70,11 +70,10 @@ export async function registerPwa() {
   });
   update?.addEventListener('click', () => {
     if (busyReasons.size) return;
-    if (reloadAvailable) { window.location.reload(); return; }
     if (registration?.waiting) {
       reloadRequested = true;
       registration.waiting.postMessage({ type: 'TWANG_PWA_ACTIVATE' });
-    }
+    } else if (reloadAvailable) window.location.reload();
   });
 
   try {

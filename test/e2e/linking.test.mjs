@@ -3,6 +3,14 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { startLinkingFixture } from './linking-fixture.mjs';
 
+async function waitUntilLinkReady(page) {
+  // The HTML fallback can render before module bootstrap and IndexedDB loading.
+  // Wait for the initialized UI, not just an enabled fallback button.
+  await page.waitForFunction(() =>
+    document.querySelector('#link-status')?.textContent === 'Ready to link an existing account' &&
+    document.querySelector('#link-start')?.disabled === false);
+}
+
 async function vaultSnapshot(page) {
   return page.evaluate(async () => {
     const db = await new Promise((resolve, reject) => { const req = indexedDB.open('twang-device', 1); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); });
@@ -30,7 +38,7 @@ test('existing account links through real browser crypto and survives reload wit
   const page = await context.newPage();
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(fixture.url);
-  await page.waitForFunction(() => document.querySelector('#link-start')?.disabled === false);
+  await waitUntilLinkReady(page);
   await page.locator('#link-device-name').fill('Twang fixture 蜘蛛');
   await page.locator('#link-start').click();
   const qr = page.locator('#link-qr canvas'); await qr.waitFor({ timeout: 20000 });
@@ -83,7 +91,7 @@ test('rejected fixture linking clears pending keys and leaves the browser unlink
   t.after(() => browser.close());
   const page = await browser.newPage();
   await page.goto(fixture.url);
-  await page.waitForFunction(() => document.querySelector('#link-start')?.disabled === false);
+  await waitUntilLinkReady(page);
   await page.locator('#link-start').click();
   await page.locator('#link-qr canvas').waitFor({ timeout: 20000 });
   await page.locator('#link-copy').click();
@@ -97,7 +105,7 @@ test('rejected fixture linking clears pending keys and leaves the browser unlink
   assert.equal(await page.locator('#link-qr').isHidden(), true);
   assert.equal(await page.locator('#link-start').isDisabled(), false);
   await page.reload();
-  await page.waitForFunction(() => document.querySelector('#link-start')?.disabled === false);
+  await waitUntilLinkReady(page);
   assert.equal(await page.locator('#link-status').textContent(), 'Ready to link an existing account');
   assert.deepEqual(fixture.state.requests.map(item => item.path), ['/v1/websocket/provisioning/', '/v1/devices/link']);
 });
