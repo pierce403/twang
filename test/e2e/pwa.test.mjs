@@ -38,8 +38,10 @@ test('PWA installs, reloads offline, and waits for idle tabs before updating', {
   const context = await browser.newContext();
   const first = await context.newPage();
   const pageErrors = [];
+  const consoleErrors = [];
   const navigations = [];
   first.on('pageerror', error => pageErrors.push(error.message));
+  first.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   first.on('framenavigated', frame => {
     if (frame === first.mainFrame()) navigations.push(frame.url());
   });
@@ -116,7 +118,20 @@ test('PWA installs, reloads offline, and waits for idle tabs before updating', {
   assert.ok(cachesAfterUpdate.includes('unrelated-app-test'));
 
   await context.setOffline(true);
+  assert.equal(await first.evaluate(() => navigator.onLine), false, 'Offline browser emulation did not apply');
   await first.reload({ waitUntil: 'domcontentloaded' });
+  try {
+    await first.waitForFunction(() => document.querySelector('#online-label')?.textContent.includes('offline'), null, { timeout: 5000 });
+  } catch (error) {
+    const state = await first.evaluate(async () => ({
+      online: navigator.onLine, secure: window.isSecureContext, readyState: document.readyState,
+      onlineLabel: document.querySelector('#online-label')?.textContent,
+      apiLabel: document.querySelector('#api-label')?.textContent,
+      linkStatus: document.querySelector('#link-status')?.textContent,
+      caches: await caches.keys(),
+    }));
+    throw new Error(`Offline app modules did not initialize: ${JSON.stringify({ state, pageErrors, consoleErrors, cachePaths })}`, { cause: error });
+  }
   assert.match(await first.title(), /Twang/i);
   assert.equal(await first.locator('#link-start').count(), 1);
   assert.match(await first.locator('#online-label').textContent(), /offline/i);
