@@ -44,6 +44,10 @@ other WebSocket destinations so tests cannot contact a real account.
 production CSP, and explicit updates blocked by a busy second tab. No actual
 Signal account is used or linked by these automated tests.
 
+The PWA test shuts down its HTTP origin before reloading and checks that the
+cached app initializes while an uncached request fails; browser online-state
+metadata is not treated as proof of network reachability.
+
 UI tests must wait for the initialized local-device state, not merely an enabled
 HTML button: IndexedDB initialization and module bootstrapping are asynchronous.
 Startup linking controls remain disabled until that state is known. PWA update

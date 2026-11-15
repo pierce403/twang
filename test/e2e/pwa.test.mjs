@@ -29,7 +29,12 @@ test('PWA installs, reloads offline, and waits for idle tabs before updating', {
     } catch { response.writeHead(404).end(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  t.after(() => new Promise(resolve => server.close(resolve)));
+  let stopping;
+  const stopServer = () => stopping ||= new Promise(resolve => {
+    server.close(resolve);
+    server.closeAllConnections();
+  });
+  t.after(stopServer);
   const browser = await chromium.launch({
     ...(process.env.TWANG_CHROMIUM_PATH ? { executablePath: process.env.TWANG_CHROMIUM_PATH } : {}),
     args: ['--no-sandbox'],
@@ -119,9 +124,15 @@ test('PWA installs, reloads offline, and waits for idle tabs before updating', {
 
   await context.setOffline(true);
   assert.equal(await first.evaluate(() => navigator.onLine), false, 'Offline browser emulation did not apply');
+  // Closing the origin proves offline operation independently of Chrome's
+  // navigator.onLine emulation, which can reset during a worker-served reload.
+  await stopServer();
   await first.reload({ waitUntil: 'domcontentloaded' });
   try {
-    await first.waitForFunction(() => document.querySelector('#online-label')?.textContent.includes('offline'), null, { timeout: 5000 });
+    await first.waitForFunction(() =>
+      document.querySelector('#api-label')?.textContent === 'WebAssembly TLS / WebSocket tunnel' &&
+      document.querySelector('#link-status')?.textContent === 'Ready to link an existing account',
+    null, { timeout: 5000 });
   } catch (error) {
     const state = await first.evaluate(async () => ({
       online: navigator.onLine, secure: window.isSecureContext, readyState: document.readyState,
@@ -134,6 +145,8 @@ test('PWA installs, reloads offline, and waits for idle tabs before updating', {
   }
   assert.match(await first.title(), /Twang/i);
   assert.equal(await first.locator('#link-start').count(), 1);
-  assert.match(await first.locator('#online-label').textContent(), /offline/i);
-  assert.equal(await first.evaluate(() => navigator.onLine), false);
+  assert.equal(await first.evaluate(async () => {
+    try { await fetch('/__pwa_uncached_network_probe__', { cache: 'no-store' }); return false; }
+    catch { return true; }
+  }), true, 'Uncached traffic unexpectedly reached the closed origin');
 });
