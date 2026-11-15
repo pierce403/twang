@@ -17,6 +17,8 @@ function clearQr() {
   $('link-qr').replaceChildren();
   $('link-qr').hidden = true;
   $('link-copy').hidden = true;
+  $('link-open').hidden = true;
+  $('link-open').removeAttribute('href');
 }
 function busy(value) {
   setPwaBusy(value, 'link');
@@ -51,6 +53,8 @@ async function showQr(url, current) {
   $('link-qr').replaceChildren(canvas);
   $('link-qr').hidden = false;
   pairingUrl = url;
+  $('link-open').href = url;
+  $('link-open').hidden = false;
   $('link-copy').hidden = false;
 }
 $('link-start').addEventListener('click', async () => {

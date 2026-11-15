@@ -39,15 +39,23 @@ test('existing account links through real browser crypto and survives reload wit
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(fixture.url);
   await waitUntilLinkReady(page);
+  assert.equal(await page.locator('#link-open').isHidden(), true);
+  assert.equal(await page.locator('#link-open').getAttribute('href'), null);
   await page.locator('#link-device-name').fill('Twang fixture 蜘蛛');
   await page.locator('#link-start').click();
   const qr = page.locator('#link-qr canvas'); await qr.waitFor({ timeout: 20000 });
   assert.equal(await qr.getAttribute('aria-label'), 'Signal linked-device pairing QR code');
   assert.ok(await qr.evaluate(canvas => canvas.width >= 280 && canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data.some(byte => byte > 0)));
+  assert.equal(await page.locator('#link-open').isVisible(), true);
+  const pairingHref = await page.locator('#link-open').getAttribute('href');
+  const pairing = new URL(pairingHref);
+  assert.equal(pairing.protocol, 'sgnl:');assert.equal(pairing.hostname, 'linkdevice');
+  assert.ok(pairing.searchParams.get('uuid'));assert.ok(pairing.searchParams.get('pub_key'));
   await page.locator('#link-copy').click();
   let deadline;
   const registration = await Promise.race([fixture.registration, new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Browser never sent fixture device link')), 20000); })]).finally(() => clearTimeout(deadline));
   assert.ok(registration, fixture.state.failure);
+  assert.equal(pairingHref, fixture.state.pairingUrl, 'Open and copy must use the same QR pairing URL');
   assert.equal(registration.deviceName, 'Twang fixture 蜘蛛');
   const pending = await vaultSnapshot(page);
   assert.deepEqual(pending.map(item => item.key).sort(), ['key', 'pending']);
@@ -62,6 +70,8 @@ test('existing account links through real browser crypto and survives reload wit
   assert.match(await page.locator('#link-account-summary').textContent(), /Twang fixture 蜘蛛 · linked device 2/);
   assert.equal(await page.locator('#link-qr').isHidden(), true);
   assert.equal(await page.locator('#link-copy').isHidden(), true);
+  assert.equal(await page.locator('#link-open').isHidden(), true);
+  assert.equal(await page.locator('#link-open').getAttribute('href'), null);
   assert.equal(await page.locator('#link-start').isDisabled(), true);
   const confirmed = await vaultSnapshot(page);
   assert.deepEqual(confirmed.map(item => item.key).sort(), ['account', 'key']);
@@ -81,6 +91,7 @@ test('existing account links through real browser crypto and survives reload wit
   await page.reload();
   await page.waitForFunction(() => document.querySelector('#link-status')?.textContent === 'Account linked');
   assert.match(await page.locator('#link-account-summary').textContent(), /linked device 2/);
+  assert.equal(await page.locator('#link-open').getAttribute('href'), null);
   assert.equal(fixture.state.requests.length, 2, 'Reload made extra account or history requests');
   assert.deepEqual(errors, []);
 });
@@ -103,9 +114,25 @@ test('rejected fixture linking clears pending keys and leaves the browser unlink
   assert.match(await page.locator('#link-error').textContent(), /expired|rejected/i);
   assert.deepEqual((await vaultSnapshot(page)).map(item => item.key), ['key']);
   assert.equal(await page.locator('#link-qr').isHidden(), true);
+  assert.equal(await page.locator('#link-open').isHidden(), true);
+  assert.equal(await page.locator('#link-open').getAttribute('href'), null);
   assert.equal(await page.locator('#link-start').isDisabled(), false);
   await page.reload();
   await waitUntilLinkReady(page);
   assert.equal(await page.locator('#link-status').textContent(), 'Ready to link an existing account');
   assert.deepEqual(fixture.state.requests.map(item => item.path), ['/v1/websocket/provisioning/', '/v1/devices/link']);
+});
+
+test('cancelling a QR removes its Signal app link', { timeout: 45000 }, async t => {
+  const fixture = await startLinkingFixture();t.after(() => fixture.close());
+  const browser = await chromium.launch({ ...(process.env.TWANG_CHROMIUM_PATH ? { executablePath: process.env.TWANG_CHROMIUM_PATH } : {}), args: ['--no-sandbox'] });
+  t.after(() => browser.close());
+  const page = await browser.newPage();await page.goto(fixture.url);await waitUntilLinkReady(page);
+  await page.locator('#link-start').click();await page.locator('#link-qr canvas').waitFor({ timeout: 20000 });
+  assert.equal(await page.locator('#link-open').isVisible(), true);
+  await page.locator('#link-cancel').click();
+  await page.waitForFunction(() => document.querySelector('#link-status')?.textContent === 'Link cancelled');
+  assert.equal(await page.locator('#link-open').isHidden(), true);
+  assert.equal(await page.locator('#link-open').getAttribute('href'), null);
+  assert.equal(fixture.state.requests.some(request => request.method === 'PUT'), false);
 });
