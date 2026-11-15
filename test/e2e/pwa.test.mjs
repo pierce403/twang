@@ -74,8 +74,11 @@ test('PWA installs, reloads offline, and waits for idle tabs before updating', {
     });
   });
   updated = true;
-  await first.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
-  await first.waitForFunction(async () => Boolean((await navigator.serviceWorker.getRegistration()).waiting));
+  await first.evaluate(async () => {
+    window.__twangTestRegistration = await navigator.serviceWorker.getRegistration();
+    await window.__twangTestRegistration.update();
+  });
+  await first.waitForFunction(() => Boolean(window.__twangTestRegistration.waiting));
   await first.locator('#pwa-update').click();
   try {
     await first.waitForFunction(() => window.__twangUpdateBlocked === true, null, { timeout: 5000 });

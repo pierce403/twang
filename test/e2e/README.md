@@ -49,3 +49,9 @@ HTML button: IndexedDB initialization and module bootstrapping are asynchronous.
 Startup linking controls remain disabled until that state is known. PWA update
 tests must exercise the real waiting worker and another busy tab; a reload alone
 is not proof that the update guard ran.
+
+When waiting for a service-worker registration property, keep the registration
+wrapper in the page and poll its property synchronously. In the pinned Playwright
+runtime, an async `waitForFunction` predicate can return a truthy Promise before
+its false value resolves, ending polling early. Await setup with `evaluate`,
+then use a synchronous predicate for the changing state.
