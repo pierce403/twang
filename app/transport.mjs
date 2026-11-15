@@ -9,27 +9,14 @@ export const SIGNAL_ENDPOINTS = Object.freeze([
   { id: 'svr2', host: 'svr2.signal.org', label: 'Secure recovery 2', description: 'HTTPS root only; no recovery requests', provisioning: false },
   { id: 'svrb', host: 'svrb.signal.org', label: 'Secure recovery B', description: 'HTTPS root only; no recovery requests', provisioning: false },
 ]);
-const hosts = new Set(SIGNAL_ENDPOINTS.map(endpoint => endpoint.host));
-const provisioningHosts = new Set(SIGNAL_ENDPOINTS.filter(endpoint => endpoint.provisioning).map(endpoint => endpoint.host));
-export const TRUST_POLICY = 'TLS and certificate validation are managed by the browser. Static pages cannot open raw TCP sockets, override certificate trust, or perform an independent TLS handshake.';
-const PROVISIONING_PATH = '/v1/websocket/provisioning/';
+export const TRUST_POLICY = 'The browser validates the outer WebSocket TLS to proxy.twang.chat. WebAssembly validates the inner Signal TLS certificate and hostname. The proxy forwards encrypted bytes and sees connection metadata, but does not receive Signal TLS keys. Diagnostics create no account or device link.';
 
 function detail(error) {
   if (error instanceof Error) return error.message;
   return String(error ?? 'Unknown error');
 }
 
-function validateHost(host) {
-  if (!hosts.has(host)) throw new Error('Only the bundled Signal service endpoints are allowed');
-  return host;
-}
-
-function targetOf(options) {
-  const host = validateHost(options.host ?? options.target?.host);
-  return { host, url: `https://${host}/`, wsUrl: `wss://${host}${PROVISIONING_PATH}` };
-}
-
-async function bounded(options, work) {
+export async function bounded(options, work) {
   const start = performance.now();
   const events = [];
   const evidence = {};
@@ -39,8 +26,12 @@ async function bounded(options, work) {
   const limit = Number.isFinite(timeoutMs) ? Math.max(1000, Math.min(timeoutMs, 30000)) : 10000;
   let phase = 'setup';
   let timedOut = false;
+  let finalized = false;
+  const cleanup = fn => {
+    try { Promise.resolve(fn()).catch(() => {}); } catch { /* Best-effort teardown. */ }
+  };
   const emit = (level, message, extra = {}) => {
-    if (controller.signal.aborted) return;
+    if (controller.signal.aborted || finalized) return;
     const event = { level, phase, stage: phase, message, ...extra };
     events.push(event);
     try { options.onEvent?.(event); } catch { /* A log renderer must not break a probe. */ }
@@ -60,7 +51,7 @@ async function bounded(options, work) {
     emit,
     setPhase(value) { phase = value; },
     setEvidence(value) { Object.assign(evidence, value); },
-    defer(fn) { cleanups.push(fn); },
+    defer(fn) { if (finalized) cleanup(fn); else cleanups.push(fn); },
     check() { controller.signal.throwIfAborted(); },
   };
   try {
@@ -74,57 +65,14 @@ async function bounded(options, work) {
     return {
       ok: false, status: outcome, outcome, summary,
       details: { phase, error: text, ...evidence,
-        interpretation: 'The browser cannot distinguish certificate, DNS, network, Origin, or CORS failures. This is not evidence that Signal itself is offline.' },
+        interpretation: phase === 'proxy-websocket' ? 'The browser hides outer WebSocket network and certificate failure details. This is not evidence that Signal itself is offline.' : 'This probe did not establish the requested transport. Inspect the recorded phase and error; a failure does not prove Signal is offline.' },
       durationMs: Math.round(performance.now() - start), events,
     };
   } finally {
+    finalized = true;
     clearTimeout(timer);
     options.signal?.removeEventListener('abort', externalAbort);
     controller.signal.removeEventListener('abort', abortListener);
-    for (const cleanup of cleanups.reverse()) {
-      try { Promise.resolve(cleanup()).catch(() => {}); } catch { /* Best-effort teardown. */ }
-    }
+    for (const fn of cleanups.reverse()) cleanup(fn);
   }
-}
-
-export function probeDirectHttps(options = {}) {
-  return bounded(options, async ctx => {
-    const { host, url } = targetOf(options);
-    ctx.setPhase('browser-https');
-    ctx.emit('info', `GET ${url} using native browser fetch`);
-    const response = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store', redirect: 'error', signal: ctx.signal });
-    ctx.defer(() => response.body?.cancel());
-    ctx.emit('success', `Readable HTTP ${response.status} response from ${host}`);
-    return {
-      summary: `Browser received HTTP ${response.status}`,
-      details: { host, httpStatus: response.status, transport: 'Native browser HTTPS', interpretation: 'Any readable HTTP response confirms this transport path. It does not establish a Signal messaging session.' },
-    };
-  });
-}
-
-export function probeDirectWebSocket(options = {}) {
-  return bounded(options, async ctx => {
-    const { host, wsUrl } = targetOf(options);
-    if (!provisioningHosts.has(host)) throw new Error('Provisioning WebSocket is tested only on Signal chat endpoints');
-    ctx.setPhase('browser-websocket');
-    ctx.emit('info', `Opening ${wsUrl} with the native WebSocket API`);
-    const socket = new WebSocket(wsUrl);
-    socket.binaryType = 'arraybuffer';
-    ctx.defer(() => socket.close(1000, 'Diagnostic complete'));
-    await new Promise((resolve, reject) => {
-      socket.addEventListener('open', resolve, { once: true });
-      socket.addEventListener('error', () => reject(new Error('Browser WebSocket failed; certificate, network, and policy details are opaque')), { once: true });
-      socket.addEventListener('close', event => reject(new Error(`Browser WebSocket closed before a result (code ${event.code})`)), { once: true });
-    });
-    ctx.check();
-    ctx.emit('success', 'Native browser WebSocket upgrade completed');
-    return { summary: 'Browser WebSocket upgrade completed', details: { host, transport: 'Native browser WSS', websocketUpgrade: true, interpretation: 'Upgrade only. No authenticated session, QR code, or account was created.' } };
-  });
-}
-
-export function runProbe(options) {
-  const probes = {https: probeDirectHttps, 'direct-https': probeDirectHttps, websocket: probeDirectWebSocket, 'direct-websocket': probeDirectWebSocket};
-  const probe = probes[options.mode];
-  if (!probe) return Promise.resolve({ok:false, status:'failure', outcome:'failure', summary:'Unsupported browser diagnostic mode', details:{}, durationMs:0, events:[]});
-  return probe(options);
 }

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#f4f5f1">
-    <meta name="description" content="A connection workbench for Signal on the web. Static-only diagnostics using native browser HTTPS and WebSockets.">
+    <meta name="description" content="A connection workbench for Signal on the web. Static diagnostics with browser-side TLS through a fixed WebSocket proxy.">
     <title>Twang · Signal connection lab</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="./styles.css">
@@ -19,8 +19,8 @@
 
     <main>
       <section class="intro">
-        <div><p class="eyebrow"><span class="live-dot"></span> A SIGNAL, THROUGH THE WEB</p><h1>Give the connection<br>a little <em>twang.</em></h1><p class="intro-copy">Find out what makes it through. Probe Signal’s endpoints directly using native browser HTTPS and WebSockets. No backend or relay.</p></div>
-        <div class="signal-art" aria-hidden="true"><svg viewBox="0 0 330 160"><path class="art-thread" d="M0 80h100l35-48 32 96 31-96 34 48h98"/><path class="art-echo" d="M0 80h100l35-24 32 48 31-48 34 24h98"/><circle cx="100" cy="80" r="5"/><circle cx="232" cy="80" r="5"/><circle class="art-node" cx="167" cy="128" r="8"/></svg><div class="art-labels"><span>BROWSER</span><span>HTTPS / WSS</span><span>SIGNAL</span></div></div>
+        <div><p class="eyebrow"><span class="live-dot"></span> A SIGNAL, THROUGH THE WEB</p><h1>Give the connection<br>a little <em>twang.</em></h1><p class="intro-copy">Find out what makes it through. Test Signal’s endpoints through our WebSocket proxy. Signal TLS stays in your browser; the app is served as static files.</p></div>
+        <div class="signal-art" aria-hidden="true"><svg viewBox="0 0 330 160"><path class="art-thread" d="M0 80h100l35-48 32 96 31-96 34 48h98"/><path class="art-echo" d="M0 80h100l35-24 32 48 31-48 34 24h98"/><circle cx="100" cy="80" r="5"/><circle cx="232" cy="80" r="5"/><circle class="art-node" cx="167" cy="128" r="8"/></svg><div class="art-labels"><span>BROWSER</span><span>ENCRYPTED TUNNEL</span><span>SIGNAL</span></div></div>
       </section>
 
       <div class="environment" aria-label="Browser environment"><span><i id="secure-indicator"></i><strong id="secure-label">Checking context</strong></span><span id="api-label">Checking browser APIs</span><span id="online-label">Checking network</span><span class="environment-note">No account or message keys required</span></div>
@@ -29,9 +29,9 @@
         <section class="panel controls" aria-labelledby="configure-heading">
           <div class="panel-heading"><span class="section-number">01</span><h2 id="configure-heading">Set up a probe</h2></div>
           <form id="probe-form">
-            <p class="field-help" id="route-help">Use the browser’s own networking. A failed probe may reflect certificate trust, CORS, or server policy.</p>
+            <p class="field-help" id="route-help">Proxy endpoint: <code id="proxy-endpoint">wss://proxy.twang.chat/v1/tls-tunnel</code></p>
 
-            <div class="field"><label for="probe-kind">Probe</label><select id="probe-kind" name="kind"><option value="https">HTTPS response</option><option value="websocket">Provisioning WebSocket</option></select><p class="field-help" id="kind-help">Requests the endpoint root. Any readable HTTP status proves that an HTTP response arrived.</p></div>
+            <div class="field"><label for="probe-kind">Probe</label><select id="probe-kind" name="kind"><option value="tls">TLS handshake</option><option value="https">HTTPS response</option><option value="websocket">Provisioning WebSocket</option></select><p class="field-help" id="kind-help">Validates the endpoint certificate and hostname inside WebAssembly.</p></div>
 
 
             <fieldset class="targets-fieldset"><legend>Signal endpoints <span class="optional">HTTPS / WSS</span></legend><div id="endpoint-list" class="endpoint-list"></div></fieldset>
@@ -46,14 +46,14 @@
         <section class="panel results-panel" aria-labelledby="results-heading">
           <div class="panel-heading"><span class="section-number">02</span><h2 id="results-heading">Read the signal</h2><span id="run-state" class="pill neutral">Ready</span></div>
           <div class="results-toolbar"><p id="results-summary" aria-live="polite">Your connection results will appear here.</p><div><button id="export" type="button" class="text-button" disabled>Export JSON <span aria-hidden="true">↓</span></button><button id="clear" type="button" class="text-button" disabled>Clear</button></div></div>
-          <div id="results" class="results" aria-live="polite"><div class="empty-state" id="empty-state"><div class="empty-glyph" aria-hidden="true">⌁</div><h3>Waiting for a vibration.</h3><p>Choose your endpoints and run a probe.<br>Each result includes timing and the evidence behind it.</p><div class="empty-path"><span>Browser</span><b>· · ·</b><span>Signal</span></div></div></div>
+          <div id="results" class="results" aria-live="polite"><div class="empty-state" id="empty-state"><div class="empty-glyph" aria-hidden="true">⌁</div><h3>Waiting for a vibration.</h3><p>Choose your endpoints and run a probe.<br>Each result includes timing and the evidence behind it.</p><div class="empty-path"><span>Browser</span><b>· · ·</b><span>Proxy</span><b>· · ·</b><span>Signal</span></div></div></div>
 
           <details id="event-log" class="event-log" open><summary><span>EVENT LOG</span><span id="event-count">0 events</span></summary><div id="log-entries" class="log-entries" role="log" aria-live="off"><p class="log-placeholder">No network activity yet.</p></div></details>
         </section>
       </div>
 
-      <section class="reading-guide" aria-label="Interpreting results"><div><span class="guide-mark">↗</span><h3>A response is a response.</h3><p>401, 403, and 404 can still prove a working transport. They don’t mean a Signal account is authenticated.</p></div><div><span class="guide-mark">⌁</span><h3>A browser error is ambiguous.</h3><p>Browser APIs usually hide TLS and handshake details. We report what was observed, without guessing the cause.</p></div><div><span class="guide-mark">◇</span><h3>Know the browser boundary.</h3><p>Static pages cannot open raw TCP sockets or run an independent TLS handshake. Certificate trust is controlled by your browser.</p></div></section>
-      <details class="trust-details"><summary>Certificate trust &amp; diagnostic scope</summary><p id="trust-policy">Native HTTPS and WSS use the browser’s certificate validation. This app cannot add Signal trust roots, bypass CORS, or speak raw Signal TLS proxy protocol.</p><p>WebSocket tests stop after an upgrade; they do not decode provisioning messages. They never generate a linking QR code, link a device, register an account, or request a user’s messages. Results live in this tab until you clear them or export a local report.</p></details>
+      <section class="reading-guide" aria-label="Interpreting results"><div><span class="guide-mark">↗</span><h3>A response is a response.</h3><p>401, 403, and 404 can still prove a working transport. They don’t mean a Signal account is authenticated.</p></div><div><span class="guide-mark">⌁</span><h3>A browser error is ambiguous.</h3><p>The outer proxy connection, inner TLS handshake, and application response are reported separately.</p></div><div><span class="guide-mark">◇</span><h3>Know the browser boundary.</h3><p>WebAssembly runs Signal TLS over an encrypted byte tunnel. The proxy forwards bytes without terminating that inner TLS session.</p></div></section>
+      <details class="trust-details"><summary>Certificate trust &amp; diagnostic scope</summary><p id="trust-policy">The browser verifies the proxy connection. WebAssembly verifies Signal’s inner TLS certificate and hostname.</p><p>WebSocket tests stop after an upgrade; they do not decode provisioning messages. They never generate a linking QR code, link a device, register an account, or request a user’s messages. Results live in this tab until you clear them or export a local report.</p></details>
     </main>
     <footer><span class="footer-brand">twang.</span><span>Experimental connection workbench · Unofficial Signal client research</span><span>Made to find the next question.</span></footer>
   </body>

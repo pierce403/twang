@@ -1,7 +1,7 @@
 import {
   SIGNAL_ENDPOINTS, TRUST_POLICY,
-  probeDirectHttps, probeDirectWebSocket,
 } from './transport.mjs';
+import { PROXY_ENDPOINT as PROXY_URL, PROXY_TRUST_POLICY, probeProxyTls, probeProxyHttps, probeProxyWebSocket } from './proxy-transport.mjs';
 
 const $ = (selector) => document.querySelector(selector);
 const form = $('#probe-form');
@@ -12,7 +12,7 @@ let controller;
 let running = false;
 let sequence = 0;
 
-const route = () => 'direct';
+const route = () => 'proxy';
 const checkedHosts = () => [...form.querySelectorAll('input[name="endpoint"]:checked:not(:disabled)')].map((input) => input.value);
 const create = (tag, className, text) => {
   const element = document.createElement(tag);
@@ -23,13 +23,14 @@ const create = (tag, className, text) => {
 function setEnvironment() {
   $('#secure-label').textContent = window.isSecureContext ? 'Secure context' : 'Insecure context';
   $('#secure-indicator').style.backgroundColor = window.isSecureContext ? '#83a25c' : '#c49755';
-  $('#api-label').textContent = 'Native HTTPS / WebSocket';
+  $('#api-label').textContent = 'WebAssembly TLS / WebSocket tunnel';
   $('#online-label').textContent = navigator.onLine ? 'Browser reports online' : 'Browser reports offline';
 }
 setEnvironment();
 window.addEventListener('online', setEnvironment);
 window.addEventListener('offline', setEnvironment);
-$('#trust-policy').textContent = TRUST_POLICY;
+$('#trust-policy').textContent = `${TRUST_POLICY} ${PROXY_TRUST_POLICY}`;
+$('#proxy-endpoint').textContent = PROXY_URL;
 
 function addEndpoint(target, parent) {
   const label = create('label', 'endpoint');
@@ -56,8 +57,9 @@ if (SIGNAL_ENDPOINTS.length > 5) {
 function updateConfiguration() { updateKind(); }
 function updateKind() {
   const descriptions = {
-    https: 'Requests the endpoint root. Any readable HTTP status proves that an HTTP response arrived.',
-    websocket: 'Tests a native browser WebSocket upgrade, then closes. No provisioning message is decoded and no device is linked.',
+    tls: 'Validates the endpoint certificate and hostname inside WebAssembly through the fixed proxy.',
+    https: 'Requests the endpoint root inside verified Signal TLS. Any readable HTTP status proves that an HTTP response arrived.',
+    websocket: 'Tests a provisioning WebSocket upgrade inside verified Signal TLS, then closes. No device is linked.',
   };
   $('#kind-help').textContent = descriptions[kind.value];
   for (const input of form.querySelectorAll('input[name="endpoint"]')) {
@@ -109,7 +111,7 @@ function resultCard(record) {
   article.dataset.state = 'working';
   const top = create('div', 'result-top');
   top.append(create('h3', 'result-host', record.host), create('span', 'pill working', 'Connecting'));
-  const meta = create('p', 'result-meta', `Direct browser · ${record.kind === 'websocket' ? 'Provisioning WebSocket' : record.kind.toUpperCase()}`);
+  const meta = create('p', 'result-meta', `Proxy / browser TLS · ${record.kind === 'websocket' ? 'Provisioning WebSocket' : record.kind.toUpperCase()}`);
   article.append(top, meta, create('p', 'result-summary', 'Starting probe…'));
   $('#results').prepend(article);
   return article;
@@ -165,7 +167,7 @@ form.addEventListener('submit', async (event) => {
       const record = {id: ++sequence, host, ...settings, startedAt: new Date().toISOString()};
       const card = resultCard(record);
       $('#results-summary').textContent = `Testing ${completed + 1} of ${hosts.length}: ${host}`;
-      const probe = settings.kind === 'https' ? probeDirectHttps : probeDirectWebSocket;
+      const probe = {tls: probeProxyTls, https: probeProxyHttps, websocket: probeProxyWebSocket}[settings.kind];
       try {
         record.result = await probe({host, ...settings, signal, onEvent: (entry) => addEvent(entry, host)});
       } catch (error) {
