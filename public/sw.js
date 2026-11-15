@@ -57,13 +57,14 @@ function clientBusy(client) {
       if (finished) return;
       finished = true;
       clearTimeout(timeout);
-      channel.port1.close();
-      channel.port2.close();
+      // port2 has been transferred into the window. Only close our local end.
+      try { channel.port1.close(); } catch { /* Already closed. */ }
       resolve(busy);
     };
     // An old or unresponsive tab is treated as busy rather than silently replaced.
     const timeout = setTimeout(() => finish(true), 1500);
     channel.port1.onmessage = event => finish(event.data?.busy !== false);
+    channel.port1.start();
     try { client.postMessage({ type: 'TWANG_PWA_STATE_REQUEST' }, [channel.port2]); }
     catch { finish(true); }
   });
@@ -71,12 +72,29 @@ function clientBusy(client) {
 
 self.addEventListener('message', event => {
   if (event.data?.type !== 'TWANG_PWA_ACTIVATE') return;
+  const reply = data => {
+    try { event.ports?.[0]?.postMessage(data); } catch { /* Requester went away. */ }
+    try { event.source?.postMessage(data); } catch { /* Requester went away. */ }
+  };
   event.waitUntil((async () => {
-    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    if ((await Promise.all(clients.map(clientBusy))).some(Boolean)) {
-      event.source?.postMessage({ type: 'TWANG_PWA_UPDATE_BLOCKED' });
-      return;
+    reply({ type: 'TWANG_PWA_UPDATE_STATUS', stage: 'checking-tabs' });
+    let timeout;
+    try {
+      const clients = await Promise.race([
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }),
+        new Promise((_resolve, reject) => { timeout = setTimeout(() => reject(new Error('Client check timed out')), 2000); }),
+      ]);
+      clearTimeout(timeout);
+      if ((await Promise.all(clients.map(clientBusy))).some(Boolean)) {
+        reply({ type: 'TWANG_PWA_UPDATE_BLOCKED', reason: 'busy-tab' });
+        return;
+      }
+      reply({ type: 'TWANG_PWA_UPDATE_ACTIVATING' });
+      await self.skipWaiting();
+    } catch (error) {
+      reply({ type: 'TWANG_PWA_UPDATE_BLOCKED', reason: 'state-check-failed', error: error.name });
+    } finally {
+      clearTimeout(timeout);
     }
-    await self.skipWaiting();
   })());
 });

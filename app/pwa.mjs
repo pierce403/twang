@@ -25,6 +25,32 @@ export function canRegisterPwa(location, secureContext) {
     location.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname));
 }
 
+// An explicit reply port avoids relying solely on the browser's queued
+// ServiceWorkerContainer messages. No response is treated as a blocked update.
+export function requestPwaUpdate(worker, onState = () => {}) {
+  return new Promise(resolve => {
+    const channel = new MessageChannel();
+    let finished = false;
+    const finish = data => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeout);
+      channel.port1.close();
+      onState(data);
+      resolve(data);
+    };
+    const timeout = setTimeout(() => finish({ type: 'TWANG_PWA_UPDATE_BLOCKED', reason: 'worker-unresponsive' }), 4500);
+    channel.port1.onmessage = event => {
+      const data = event.data;
+      if (data?.type === 'TWANG_PWA_UPDATE_BLOCKED' || data?.type === 'TWANG_PWA_UPDATE_ACTIVATING') finish(data);
+      else if (data?.type === 'TWANG_PWA_UPDATE_STATUS') onState(data);
+    };
+    channel.port1.start();
+    try { worker.postMessage({ type: 'TWANG_PWA_ACTIVATE' }, [channel.port2]); }
+    catch { finish({ type: 'TWANG_PWA_UPDATE_BLOCKED', reason: 'request-failed' }); }
+  });
+}
+
 export async function registerPwa() {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) ||
       !canRegisterPwa(window.location, window.isSecureContext)) return;
@@ -54,15 +80,20 @@ export async function registerPwa() {
     catch { status('Use your browser menu to install Twang.'); }
   });
 
-  navigator.serviceWorker.addEventListener('message', event => {
-    if (event.data?.type === 'TWANG_PWA_STATE_REQUEST')
-      event.ports[0]?.postMessage({ busy: busyReasons.size > 0 });
-    if (event.data?.type === 'TWANG_PWA_UPDATE_BLOCKED') {
+  const updateState = data => {
+    if (data?.type === 'TWANG_PWA_UPDATE_BLOCKED') {
       reloadRequested = false;
       status('Finish active connections in your Twang tabs before updating.');
       updateButton();
     }
+    window.dispatchEvent(new CustomEvent('twang:pwa-update', { detail: data }));
+  };
+  navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data?.type === 'TWANG_PWA_STATE_REQUEST')
+      event.ports[0]?.postMessage({ busy: busyReasons.size > 0 });
+    else if (event.data?.type?.startsWith('TWANG_PWA_UPDATE_')) updateState(event.data);
   });
+  navigator.serviceWorker.startMessages?.();
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadController) { hadController = true; return; }
     if (reloadRequested && !busyReasons.size) window.location.reload();
@@ -72,7 +103,7 @@ export async function registerPwa() {
     if (busyReasons.size) return;
     if (registration?.waiting) {
       reloadRequested = true;
-      registration.waiting.postMessage({ type: 'TWANG_PWA_ACTIVATE' });
+      void requestPwaUpdate(registration.waiting, updateState);
     } else if (reloadAvailable) window.location.reload();
   });
 

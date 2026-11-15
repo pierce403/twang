@@ -66,8 +66,11 @@ test('PWA installs, reloads offline, and waits for idle tabs before updating', {
   });
   await first.evaluate(async () => {
     await caches.open('unrelated-app-test');
-    navigator.serviceWorker.addEventListener('message', event => {
-      if (event.data?.type === 'TWANG_PWA_UPDATE_BLOCKED') window.__twangUpdateBlocked = true;
+    window.__twangUpdateEvents = [];
+    window.addEventListener('twang:pwa-update', event => {
+      window.__twangUpdateEvents.push(event.detail);
+      if (event.detail?.type === 'TWANG_PWA_UPDATE_BLOCKED' && event.detail.reason === 'busy-tab')
+        window.__twangUpdateBlocked = true;
     });
   });
   updated = true;
@@ -84,6 +87,7 @@ test('PWA installs, reloads offline, and waits for idle tabs before updating', {
         url: location.href, controller: navigator.serviceWorker.controller?.state,
         waiting: registration?.waiting?.state, active: registration?.active?.state,
         blocked: window.__twangUpdateBlocked,
+        updateEvents: window.__twangUpdateEvents,
         button: button && { text: button.textContent, hidden: button.hidden, disabled: button.disabled },
         status: document.querySelector('#pwa-status')?.textContent,
       };

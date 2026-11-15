@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { buildPwa } from '../scripts/pwa-build.mjs';
-import { canRegisterPwa, registerPwa, setPwaBusy } from '../app/pwa.mjs';
+import { canRegisterPwa, registerPwa, setPwaBusy, requestPwaUpdate } from '../app/pwa.mjs';
 
 const template = await readFile(new URL('../public/sw.js', import.meta.url), 'utf8');
 
@@ -116,7 +116,7 @@ test('explicit updates wait for every active app tab to be idle', async () => {
     let updating;
     let blocked = false;
     state.events.get('message')({ data: { type: 'TWANG_PWA_ACTIVATE' },
-      source: { postMessage: () => { blocked = true; } }, waitUntil: promise => { updating = promise; } });
+      source: { postMessage: data => { if (data.type === 'TWANG_PWA_UPDATE_BLOCKED') blocked = true; } }, waitUntil: promise => { updating = promise; } });
     await updating;
     assert.equal(state.skipped(), !busy);
     assert.equal(blocked, busy);
@@ -144,22 +144,61 @@ test('a waiting update takes priority over a stale reload notification', async t
   const registration = new EventTarget();
   const window = new EventTarget();
   let reloads = 0;
+  let messagesStarted = false;
   let activation;
   window.location = { protocol: 'http:', hostname: 'localhost', reload: () => { reloads++; } };
   window.isSecureContext = true;
   serviceWorker.controller = { state: 'activated' };
   serviceWorker.register = async () => registration;
+  serviceWorker.startMessages = () => { messagesStarted = true; };
   Object.defineProperty(globalThis, 'window', { value: window, configurable: true });
   Object.defineProperty(globalThis, 'document', { value: {
     querySelector: selector => selector === '#pwa-update' ? update : null,
   }, configurable: true });
   Object.defineProperty(globalThis, 'navigator', { value: { serviceWorker }, configurable: true });
   await registerPwa();
+  assert.equal(messagesStarted, true);
   serviceWorker.dispatchEvent(new Event('controllerchange'));
-  registration.waiting = { postMessage: message => { activation = message; } };
+  registration.waiting = { postMessage: (message, ports) => {
+    activation = message;
+    ports[0].postMessage({ type: 'TWANG_PWA_UPDATE_BLOCKED', reason: 'busy-tab' });
+  } };
   setPwaBusy(false);
+  const replied = new Promise(resolve => window.addEventListener('twang:pwa-update', resolve, { once: true }));
   update.dispatchEvent(new Event('click'));
+  await replied;
   assert.equal(reloads, 0);
   assert.equal(activation.type, 'TWANG_PWA_ACTIVATE');
   assert.equal(update.textContent, 'Update app');
+});
+
+test('worker update results use the explicit reply port and fail closed on request errors', async () => {
+  const statuses = [];
+  const result = await requestPwaUpdate({ postMessage(message, ports) {
+    assert.equal(message.type, 'TWANG_PWA_ACTIVATE');
+    ports[0].postMessage({ type: 'TWANG_PWA_UPDATE_STATUS', stage: 'checking-tabs' });
+    ports[0].postMessage({ type: 'TWANG_PWA_UPDATE_BLOCKED', reason: 'busy-tab' });
+  } }, data => statuses.push(data));
+  assert.equal(result.reason, 'busy-tab');
+  assert.equal(statuses[0].stage, 'checking-tabs');
+  assert.equal(statuses[1].type, 'TWANG_PWA_UPDATE_BLOCKED');
+  const failed = await requestPwaUpdate({ postMessage() { throw new Error('Worker gone'); } });
+  assert.equal(failed.type, 'TWANG_PWA_UPDATE_BLOCKED');
+  assert.equal(failed.reason, 'request-failed');
+});
+
+test('worker client-query failures report a blocked update rather than hanging', async () => {
+  const state = worker();
+  state.context.self.clients.matchAll = async () => { throw new Error('Client query failed'); };
+  const reply = new MessageChannel();
+  const result = new Promise(resolve => { reply.port1.onmessage = event => {
+    if (event.data.type === 'TWANG_PWA_UPDATE_BLOCKED') resolve(event.data);
+  }; });
+  let updating;
+  state.events.get('message')({ data: { type: 'TWANG_PWA_ACTIVATE' }, ports: [reply.port2],
+    waitUntil: promise => { updating = promise; } });
+  await updating;
+  assert.equal((await result).reason, 'state-check-failed');
+  assert.equal(state.skipped(), false);
+  reply.port1.close();reply.port2.close();
 });
