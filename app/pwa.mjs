@@ -54,6 +54,11 @@ export function requestPwaUpdate(worker, onState = () => {}) {
 export async function registerPwa() {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) ||
       !canRegisterPwa(window.location, window.isSecureContext)) return;
+  // Dependencies can be imported before the app's header has been parsed.
+  // Capture controls only once the document is ready, otherwise later update
+  // notifications could reveal a button whose click listener was never bound.
+  if (document.readyState === 'loading') await new Promise(resolve =>
+    document.addEventListener('DOMContentLoaded', resolve, { once: true }));
   const install = document.querySelector('#install-app');
   const update = document.querySelector('#pwa-update');
   let hadController = Boolean(navigator.serviceWorker.controller);
@@ -99,7 +104,22 @@ export async function registerPwa() {
     if (reloadRequested && !busyReasons.size) window.location.reload();
     else { reloadAvailable = true; updateButton(); }
   });
-  update?.addEventListener('click', () => {
+  update?.addEventListener('click', async () => {
+    updateState({ type: 'TWANG_PWA_UPDATE_STATUS', stage: 'clicked',
+      busy: busyReasons.size > 0, waiting: Boolean(registration?.waiting), reload: reloadAvailable });
+    if (busyReasons.size) return;
+    try {
+      // Fetch a current wrapper: an update can replace registration.waiting
+      // after the original register() call returned.
+      if (navigator.serviceWorker.getRegistration)
+        registration = await navigator.serviceWorker.getRegistration();
+    } catch {
+      updateState({ type: 'TWANG_PWA_UPDATE_BLOCKED', reason: 'registration-unavailable' });
+      return;
+    }
+    updateState({ type: 'TWANG_PWA_UPDATE_STATUS', stage: 'checked-registration',
+      busy: busyReasons.size > 0, waiting: Boolean(registration?.waiting), reload: reloadAvailable });
+    // Linking may have started while the registration lookup was pending.
     if (busyReasons.size) return;
     if (registration?.waiting) {
       reloadRequested = true;

@@ -164,7 +164,9 @@ test('a waiting update takes priority over a stale reload notification', async t
     ports[0].postMessage({ type: 'TWANG_PWA_UPDATE_BLOCKED', reason: 'busy-tab' });
   } };
   setPwaBusy(false);
-  const replied = new Promise(resolve => window.addEventListener('twang:pwa-update', resolve, { once: true }));
+  const replied = new Promise(resolve => window.addEventListener('twang:pwa-update', event => {
+    if (event.detail.type === 'TWANG_PWA_UPDATE_BLOCKED') resolve();
+  }));
   update.dispatchEvent(new Event('click'));
   await replied;
   assert.equal(reloads, 0);
@@ -201,4 +203,50 @@ test('worker client-query failures report a blocked update rather than hanging',
   assert.equal((await result).reason, 'state-check-failed');
   assert.equal(state.skipped(), false);
   reply.port1.close();reply.port2.close();
+});
+
+test('early imports wait for the header before binding the update button', async t => {
+  const saved = new Map(['window', 'document', 'navigator'].map(key => [key,
+    Object.getOwnPropertyDescriptor(globalThis, key)]));
+  t.after(() => {
+    for (const [key, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  });
+  const update = new EventTarget();
+  const serviceWorker = new EventTarget();
+  const registration = new EventTarget();
+  const window = new EventTarget();
+  const document = new EventTarget();
+  let registered = false;
+  let lookedUp = false;
+  let clicked;
+  window.location = { protocol: 'http:', hostname: 'localhost', reload() {} };
+  window.isSecureContext = true;
+  document.readyState = 'loading';
+  document.querySelector = selector => document.readyState !== 'loading' && selector === '#pwa-update' ? update : null;
+  registration.waiting = { postMessage(_message, ports) {
+    ports[0].postMessage({ type: 'TWANG_PWA_UPDATE_BLOCKED', reason: 'busy-tab' });
+  } };
+  serviceWorker.controller = { state: 'activated' };
+  serviceWorker.register = async () => { registered = true; return registration; };
+  serviceWorker.getRegistration = async () => { lookedUp = true; return registration; };
+  Object.defineProperty(globalThis, 'window', { value: window, configurable: true });
+  Object.defineProperty(globalThis, 'document', { value: document, configurable: true });
+  Object.defineProperty(globalThis, 'navigator', { value: { serviceWorker }, configurable: true });
+  const setup = registerPwa();
+  assert.equal(registered, false);
+  document.readyState = 'interactive';
+  document.dispatchEvent(new Event('DOMContentLoaded'));
+  await setup;
+  const replied = new Promise(resolve => window.addEventListener('twang:pwa-update', event => {
+    if (event.detail.stage === 'clicked') clicked = event.detail;
+    if (event.detail.type === 'TWANG_PWA_UPDATE_BLOCKED') resolve();
+  }));
+  update.dispatchEvent(new Event('click'));
+  await replied;
+  assert.equal(clicked.waiting, true);
+  assert.equal(clicked.busy, false);
+  assert.equal(lookedUp, true);
 });
